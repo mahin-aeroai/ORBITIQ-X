@@ -189,6 +189,45 @@ async def _cache_report(redis_client, report: SyncReport) -> None:
 
 # ── Job functions ─────────────────────────────────────────────
 
+async def _run_conjunction_screening() -> None:
+    """
+    6-hour conjunction screening job.
+    Runs AFTER full_catalog_sync completes via event coordination.
+    Protected by a separate distributed lock.
+    """
+    from app.db.redis_session import get_redis
+    from app.services.conjunction_analysis_service import ConjunctionAnalysisService
+    from app.db.session import get_session_factory
+
+    redis  = get_redis()
+    run_id = str(uuid.uuid4())[:8]
+    lock   = f"orbitiq:conjunction_screen:lock"
+
+    logger.info("conjunction_screening_job_start run=%s", run_id)
+
+    if redis:
+        async with _distributed_lock(redis, lock, 3600, run_id) as acquired:
+            if not acquired:
+                logger.warning("conjunction_screening_job_skipped reason=lock_held")
+                return
+            await _execute_conjunction_screening(run_id, redis)
+    else:
+        await _execute_conjunction_screening(run_id, redis=None)
+
+
+async def _execute_conjunction_screening(run_id: str, redis) -> None:
+    from app.db.session import get_session_factory
+    from app.services.conjunction_analysis_service import ConjunctionAnalysisService
+    factory = get_session_factory()
+    async with factory() as session:
+        svc = ConjunctionAnalysisService(session, redis_client=redis)
+        report = await svc.run_screening(run_id=run_id)
+        logger.info(
+            "conjunction_screening_job_complete run=%s status=%s conjunctions=%d",
+            run_id, report.status, report.total_conjunctions,
+        )
+
+
 async def _run_full_catalog_sync() -> SyncReport | None:
     """
     6-hour full catalog sync job.
@@ -336,6 +375,15 @@ def build_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=2),
         id="incremental_tle_refresh",
         name="Space-Track Incremental TLE Refresh (2h)",
+        replace_existing=True,
+    )
+
+    # Conjunction screening every 6 hours (staggered 30min after catalog sync)
+    scheduler.add_job(
+        func=_run_conjunction_screening,
+        trigger=IntervalTrigger(hours=6, start_date="2000-01-01 00:30:00"),
+        id="conjunction_screening",
+        name="Full Catalog Conjunction Screening (6h)",
         replace_existing=True,
     )
 
