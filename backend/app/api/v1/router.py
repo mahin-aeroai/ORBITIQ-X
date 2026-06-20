@@ -83,6 +83,14 @@ api_v1_router.include_router(
     tags=["Mission Planning"],
 )
 
+# ─── Foundation Model Platform ───────────────────────────────────────────────
+from app.api.v1.endpoints import foundation  # noqa: E402
+api_v1_router.include_router(
+    foundation.router,
+    prefix="/foundation",
+    tags=["Foundation Model Platform"],
+)
+
 # ─── Catalog / Space-Track Ingestion ──────────────────────────────────────────
 from app.api.v1.endpoints import catalog  # noqa: E402
 
