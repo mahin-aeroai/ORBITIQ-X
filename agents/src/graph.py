@@ -52,7 +52,7 @@ from typing import Any, Literal
 from anthropic import AsyncAnthropic
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
-from langgraph.pregel import Send
+from langgraph.types import Send
 
 from .agents.specialist_agents import (
     OrbitalDynamicsAgent,
