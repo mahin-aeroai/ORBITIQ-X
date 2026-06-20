@@ -28,14 +28,20 @@ import numpy as np
 from sgp4.api import Satrec, WGS72, WGS84, accelerated
 from sgp4.earth_gravity import wgs72, wgs84
 
-from orbital_engine.src.propagator.constants import (
+from .constants import (
     EARTH_RADIUS_KM,
     MU_KM3_S2,
     J2_COEFFICIENT,
     SECONDS_PER_MINUTE,
 )
-from orbital_engine.src.propagator.tle_parser import TwoLineElement, parse_tle_pair
-from orbital_engine.src.propagator.validators import validate_tle_epoch, validate_state_vector
+from .tle_parser import TwoLineElement
+from .time_utils import (
+    JulianDate,
+    JulianDateError,
+    datetime_to_julian,
+    datetimes_to_julian_arrays,
+)
+from .validators import validate_tle_epoch, validate_state_vector, StateVectorError
 
 logger = logging.getLogger(__name__)
 
@@ -197,30 +203,49 @@ class SGP4Propagator:
             self._gravity_model,
         )
 
-        results: list[StateVector] = []
-        for epoch in epochs:
-            epoch_utc = epoch.replace(tzinfo=timezone.utc) if epoch.tzinfo is None else epoch
-            e, r, v = satellite.sgp4_array(
-                np.array([epoch_utc.timestamp()]),
-                np.zeros(1),
-            )
+        # ── Batch Julian Date conversion (single validated pass) ──────
+        # CRITICAL: sgp4_array() requires Julian Date split as (jd, fr).
+        # Passing epoch.timestamp() (Unix seconds) is WRONG and returns
+        # error_code=1 with NaN positions. datetime_to_julian() validates
+        # and raises JulianDateError before any SGP4 call is made.
+        normalised: list[datetime] = [
+            ep.replace(tzinfo=timezone.utc) if ep.tzinfo is None else ep
+            for ep in epochs
+        ]
 
-            error_code = int(e[0])
+        try:
+            jds, frs = datetimes_to_julian_arrays(normalised)
+        except (JulianDateError, ValueError) as exc:
+            raise JulianDateError(
+                f"NORAD {tle.norad_id}: invalid epoch in propagation request — {exc}"
+            ) from exc
+
+        jd_arr = np.array(jds, dtype=np.float64)
+        fr_arr = np.array(frs, dtype=np.float64)
+
+        # ── Single vectorised SGP4 call across all epochs ──────────────
+        # sgp4_array() is faster than calling sgp4() in a Python loop
+        # because the C extension avoids re-entering Python for each epoch.
+        errors, positions, velocities = satellite.sgp4_array(jd_arr, fr_arr)
+
+        results: list[StateVector] = []
+        for i, epoch_utc in enumerate(normalised):
+            error_code = int(errors[i])
+
             if error_code != 0:
                 logger.warning(
                     "sgp4_propagation_error",
                     norad_id=tle.norad_id,
                     epoch=epoch_utc.isoformat(),
+                    jd=jds[i],
+                    fr=frs[i],
                     error_code=error_code,
                 )
                 pos = np.full(3, np.nan)
                 vel = np.full(3, np.nan)
             else:
-                pos = np.array(r[0], dtype=np.float64)
-                vel = np.array(v[0], dtype=np.float64)
-
-                if self._should_apply_j2_correction(pos):
-                    pos, vel = self._apply_j2_delta(pos, vel, epoch_utc, tle)
+                pos = np.array(positions[i], dtype=np.float64)
+                vel = np.array(velocities[i], dtype=np.float64)
 
             state = StateVector(
                 epoch=epoch_utc,
@@ -230,7 +255,23 @@ class SGP4Propagator:
                 error_code=error_code,
             )
             if error_code == 0:
-                validate_state_vector(state)
+                try:
+                    validate_state_vector(state)
+                except StateVectorError as exc:
+                    logger.error(
+                        "state_vector_physically_invalid",
+                        norad_id=tle.norad_id,
+                        epoch=epoch_utc.isoformat(),
+                        error=str(exc),
+                    )
+                    # Re-tag as error so callers don't use the bad vector
+                    state = StateVector(
+                        epoch=epoch_utc,
+                        norad_id=tle.norad_id,
+                        position_eci_km=np.full(3, np.nan),
+                        velocity_eci_km_s=np.full(3, np.nan),
+                        error_code=99,  # ORBITIQ internal: physical validation failed
+                    )
             results.append(state)
 
         return results

@@ -179,10 +179,15 @@ def predict_reentry(
         return None
 
     # Extract elements
-    n_rev_day = sat.no_kozai / (2 * math.pi / 1440.0)  # rev/day → rad/min to rev/day
-    a_km = (EARTH_MU / (sat.no_kozai / 60.0)**2) ** (1/3)  # km
-    e = sat.ecco
-    bstar = sat.bstar
+    # sat.no_kozai is in rad/min (SGP4 internal unit).
+    # Correct conversion to rev/day: multiply by (1440 min/day / 2π rad/rev)
+    # BUG FIX: previous code divided instead of multiplied, giving a value
+    # ~8.77 million times too small, making a_km wildly incorrect.
+    n_rev_day = sat.no_kozai * (1440.0 / (2 * math.pi))   # rad/min → rev/day
+    n_rad_s   = sat.no_kozai / 60.0                        # rad/min → rad/s
+    a_km      = (EARTH_MU / n_rad_s**2) ** (1.0 / 3.0)    # km
+    e         = sat.ecco
+    bstar     = sat.bstar
 
     perigee = a_km * (1 - e) - EARTH_RADIUS_KM
     apogee  = a_km * (1 + e) - EARTH_RADIUS_KM
