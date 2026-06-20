@@ -1,0 +1,285 @@
+/**
+ * ORBITIQ-X — Global Styles & Design Token System
+ * =================================================
+ * Design language: "Mission Control Dark"
+ * 
+ * Visual identity: deep space black substrate, electric indigo for primary
+ * actions, phosphor amber for alerts, and monospaced readouts for orbital
+ * data — evoking real mission control displays without nostalgic kitsch.
+ * 
+ * Signature element: the scan-line texture on the orbital globe panel,
+ * implemented via a CSS repeating-linear-gradient overlay — a nod to
+ * CRT-era mission control rooms that doesn't read as retro styling.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Token System ───────────────────────────────────────────────────── */
+:root {
+  /* Color — Space palette */
+  --color-space-deep:      #050810;      /* Deepest background */
+  --color-space-midnight:  #080d1a;      /* Primary background */
+  --color-space-navy:      #0c1428;      /* Surface level 1 */
+  --color-space-surface:   #111d35;      /* Surface level 2 */
+  --color-space-elevated:  #162040;      /* Elevated panels */
+  --color-space-border:    #1e2d4a;      /* Subtle borders */
+  --color-space-border-strong: #2a3f66;  /* Strong borders */
+
+  /* Accent — Electric Indigo (primary actions, globe highlights) */
+  --color-accent-indigo:   #6366f1;
+  --color-accent-indigo-bright: #818cf8;
+  --color-accent-indigo-dim: #3730a3;
+  --color-accent-indigo-glow: rgba(99, 102, 241, 0.15);
+
+  /* Accent — Phosphor Amber (alerts, warnings, conjunction events) */
+  --color-accent-amber:    #f59e0b;
+  --color-accent-amber-bright: #fbbf24;
+  --color-accent-amber-dim: #92400e;
+  --color-accent-amber-glow: rgba(245, 158, 11, 0.15);
+
+  /* Accent — Signal Green (nominal / healthy status) */
+  --color-accent-green:    #10b981;
+  --color-accent-green-bright: #34d399;
+  --color-accent-green-dim: #064e3b;
+  --color-accent-green-glow: rgba(16, 185, 129, 0.12);
+
+  /* Accent — Alert Red (critical conjunction, system errors) */
+  --color-accent-red:      #ef4444;
+  --color-accent-red-bright: #f87171;
+  --color-accent-red-glow: rgba(239, 68, 68, 0.15);
+
+  /* Text */
+  --color-text-primary:    #e2e8f8;      /* Primary readable text */
+  --color-text-secondary:  #94a3b8;      /* Secondary / metadata */
+  --color-text-tertiary:   #475569;      /* Muted / disabled */
+  --color-text-accent:     #818cf8;      /* Highlighted values */
+  --color-text-data:       #7dd3fc;      /* Orbital data readouts */
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Spacing (8px base unit) */
+  --space-unit: 8px;
+
+  /* Radii */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 16px;
+
+  /* Shadows (inward glow for mission-display aesthetic) */
+  --shadow-indigo-glow: 0 0 20px rgba(99, 102, 241, 0.2), 0 0 40px rgba(99, 102, 241, 0.08);
+  --shadow-amber-glow:  0 0 20px rgba(245, 158, 11, 0.2),  0 0 40px rgba(245, 158, 11, 0.08);
+  --shadow-panel: 0 4px 24px rgba(0, 0, 0, 0.6);
+
+  /* Transitions */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Base Styles ─────────────────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-space-midnight);
+    color: var(--color-text-primary);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* Monospaced orbital data */
+  .font-mono, code, kbd, pre, .data-readout {
+    font-family: var(--font-mono);
+  }
+
+  /* Custom scrollbar (WebKit) */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-space-navy);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-space-border-strong);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent-indigo-dim);
+  }
+
+  /* Focus ring */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-indigo);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: rgba(99, 102, 241, 0.3);
+    color: white;
+  }
+}
+
+/* ─── Component Classes ──────────────────────────────────────────────────────── */
+@layer components {
+
+  /* Panel — the primary container unit */
+  .panel {
+    background-color: var(--color-space-navy);
+    border: 1px solid var(--color-space-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .panel-elevated {
+    background-color: var(--color-space-elevated);
+    border: 1px solid var(--color-space-border-strong);
+  }
+
+  /* Section label — uppercase eyebrow text for panel headers */
+  .section-label {
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+
+  /* Data readout — monospaced orbital values */
+  .data-value {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--color-text-data);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .data-value-large {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Status badges */
+  .status-nominal {
+    color: var(--color-accent-green);
+    background-color: var(--color-accent-green-glow);
+    border: 1px solid var(--color-accent-green-dim);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .status-watch {
+    color: var(--color-accent-amber);
+    background-color: var(--color-accent-amber-glow);
+    border: 1px solid var(--color-accent-amber-dim);
+  }
+
+  .status-critical {
+    color: var(--color-accent-red);
+    background-color: var(--color-accent-red-glow);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Globe scan-line overlay (the signature element) */
+  .globe-scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 0, 0, 0.03) 2px,
+      rgba(0, 0, 0, 0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+    border-radius: inherit;
+  }
+
+  /* Accent glow border */
+  .border-indigo-glow {
+    border-color: var(--color-accent-indigo);
+    box-shadow: var(--shadow-indigo-glow);
+  }
+
+  .border-amber-glow {
+    border-color: var(--color-accent-amber);
+    box-shadow: var(--shadow-amber-glow);
+  }
+}
+
+/* ─── Utility Extensions ─────────────────────────────────────────────────────── */
+@layer utilities {
+  .bg-space-deep      { background-color: var(--color-space-deep); }
+  .bg-space-midnight  { background-color: var(--color-space-midnight); }
+  .bg-space-navy      { background-color: var(--color-space-navy); }
+  .bg-space-surface   { background-color: var(--color-space-surface); }
+  .bg-space-elevated  { background-color: var(--color-space-elevated); }
+  .border-space-border { border-color: var(--color-space-border); }
+  .text-space-text    { color: var(--color-text-primary); }
+  .text-space-muted   { color: var(--color-text-secondary); }
+  .text-space-accent  { color: var(--color-text-accent); }
+  .text-space-accent-amber  { color: var(--color-accent-amber); }
+  .text-space-accent-indigo { color: var(--color-accent-indigo); }
+  .text-space-accent-green  { color: var(--color-accent-green); }
+  .text-data          { color: var(--color-text-data); font-family: var(--font-mono); }
+  .font-display       { font-family: var(--font-display); }
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+@keyframes satellite-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes data-update {
+  0%   { color: var(--color-accent-indigo-bright); }
+  100% { color: var(--color-text-data); }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

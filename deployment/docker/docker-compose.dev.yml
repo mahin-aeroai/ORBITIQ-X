@@ -1,0 +1,266 @@
+# =============================================================================
+# ORBITIQ-X — Docker Compose Development Stack
+# =============================================================================
+# Launches all infrastructure services for local development.
+# Application services (backend, frontend) run on the host for hot-reload.
+#
+# Usage:
+#   docker compose -f deployment/docker/docker-compose.dev.yml up -d
+#   docker compose -f deployment/docker/docker-compose.dev.yml down -v  # also removes volumes
+# =============================================================================
+
+name: orbitiq-x-dev
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "3"
+
+x-restart: &default-restart
+  restart: unless-stopped
+
+services:
+
+  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    <<: *default-restart
+    container_name: orbitiq-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-orbitiq_db}
+      POSTGRES_USER: ${POSTGRES_USER:-orbitiq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orbitiq_dev_password}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-scripts/postgres:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orbitiq} -d ${POSTGRES_DB:-orbitiq_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.4-alpine
+    <<: *default-restart
+    container_name: orbitiq-redis
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-orbitiq_dev_password}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-orbitiq_dev_password}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── Neo4j (Knowledge Graph) ─────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.25-community
+    <<: *default-restart
+    container_name: orbitiq-neo4j
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-orbitiq_dev_password}
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*,gds.*"
+      NEO4J_dbms_security_procedures_allowlist: "apoc.*,gds.*"
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_plugins:/plugins
+      - ./init-scripts/neo4j:/var/lib/neo4j/import:ro
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"      # Browser UI
+      - "${NEO4J_BOLT_PORT:-7687}:7687"      # Bolt protocol
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── Weaviate (Vector Store) ─────────────────────────────────────────────
+  weaviate:
+    image: semitechnologies/weaviate:1.27.2
+    <<: *default-restart
+    container_name: orbitiq-weaviate
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_APIKEY_ENABLED: "true"
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: ${WEAVIATE_API_KEY:-orbitiq_dev_key}
+      AUTHENTICATION_APIKEY_USERS: admin
+      AUTHORIZATION_ADMINLIST_ENABLED: "true"
+      AUTHORIZATION_ADMINLIST_USERS: admin
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: text2vec-openai
+      ENABLE_MODULES: "text2vec-openai,generative-openai"
+      OPENAI_APIKEY: ${OPENAI_API_KEY:-}
+      CLUSTER_HOSTNAME: orbitiq-weaviate
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    ports:
+      - "${WEAVIATE_PORT:-8080}:8080"
+      - "${WEAVIATE_GRPC_PORT:-50051}:50051"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/v1/.well-known/ready || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── InfluxDB (Space Weather Time-Series) ─────────────────────────────────
+  influxdb:
+    image: influxdb:2.7-alpine
+    <<: *default-restart
+    container_name: orbitiq-influxdb
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_TOKEN:-orbitiq_dev_password}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-orbitiq-x}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-space_weather}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN:-orbitiq_dev_token}
+    volumes:
+      - influx_data:/var/lib/influxdb2
+    ports:
+      - "${INFLUXDB_PORT:-8086}:8086"
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── MinIO (Object Storage) ──────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    <<: *default-restart
+    container_name: orbitiq-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_dev}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── Prometheus ──────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    <<: *default-restart
+    container_name: orbitiq-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    volumes:
+      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+  # ─── Grafana ─────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.4.0
+    <<: *default-restart
+    container_name: orbitiq-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-orbitiq_dev}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_FEATURE_TOGGLES_ENABLE: "publicDashboards"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ../monitoring/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    networks:
+      - orbitiq-net
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  pgdata:
+    name: orbitiq_pgdata
+  redis_data:
+    name: orbitiq_redis_data
+  neo4j_data:
+    name: orbitiq_neo4j_data
+  neo4j_logs:
+    name: orbitiq_neo4j_logs
+  neo4j_plugins:
+    name: orbitiq_neo4j_plugins
+  weaviate_data:
+    name: orbitiq_weaviate_data
+  influx_data:
+    name: orbitiq_influx_data
+  minio_data:
+    name: orbitiq_minio_data
+  prometheus_data:
+    name: orbitiq_prometheus_data
+  grafana_data:
+    name: orbitiq_grafana_data
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  orbitiq-net:
+    name: orbitiq-x-dev-network
+    driver: bridge

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orbitiq-x.dev/schemas/rso-catalog/v1",
+  "title": "ORBITIQ-X RSO Catalog Entry",
+  "description": "Schema for a single Resident Space Object catalog entry",
+  "type": "object",
+  "required": ["norad_id", "sat_name", "object_type", "orbit_class"],
+  "properties": {
+    "norad_id": { "type": "integer", "minimum": 1, "description": "NORAD Catalog Number" },
+    "sat_name": { "type": "string", "maxLength": 24 },
+    "intl_designator": { "type": "string", "pattern": "^\\d{4}-\\d{3}[A-Z]+$" },
+    "object_type": { "enum": ["PAYLOAD", "ROCKET_BODY", "DEBRIS", "UNKNOWN"] },
+    "orbit_class": { "enum": ["LEO", "VLEO", "MEO", "GEO", "HEO", "SSO", "UNKNOWN"] },
+    "country_code": { "type": ["string", "null"] },
+    "operator_name": { "type": ["string", "null"] },
+    "perigee_km": { "type": ["number", "null"], "minimum": 0 },
+    "apogee_km": { "type": ["number", "null"], "minimum": 0 },
+    "inclination_deg": { "type": ["number", "null"], "minimum": 0, "maximum": 180 },
+    "period_min": { "type": ["number", "null"], "minimum": 0 },
+    "launch_epoch": { "type": ["string", "null"], "format": "date" },
+    "is_active": { "type": "boolean" }
+  }
+}

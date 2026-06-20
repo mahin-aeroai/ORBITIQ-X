@@ -1,0 +1,70 @@
+# =============================================================================
+# ORBITIQ-X Backend — Production Dockerfile
+# =============================================================================
+# Multi-stage build: builder → runtime
+# Target image: ~400MB (Python 3.11 slim + compiled dependencies)
+# =============================================================================
+
+# ─── Stage 1: Builder ────────────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+# Build-time dependencies for Python extensions (numpy, scipy, sgp4 C extension)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    gfortran \
+    libopenblas-dev \
+    liblapack-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Copy requirements first (layer cache optimization)
+COPY backend/requirements/base.txt requirements.txt
+RUN pip install --upgrade pip wheel setuptools && \
+    pip install --prefix=/install --no-deps -r requirements.txt
+
+# ─── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+LABEL maintainer="Mahin Nandipa <mahin@orbitiq-x.dev>" \
+      version="0.1.0" \
+      description="ORBITIQ-X Backend — Aerospace Foundation Model API"
+
+# Runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libopenblas0 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1001 orbitiq \
+    && useradd --uid 1001 --gid 1001 --shell /bin/bash --no-create-home orbitiq
+
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+
+# Copy application source
+COPY backend/app ./app
+
+# Security: run as non-root
+USER orbitiq
+
+EXPOSE 8000
+
+# Health check for Docker / Kubernetes
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Production server: gunicorn with uvicorn workers
+CMD ["gunicorn", "app.main:app", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--workers", "4", \
+     "--bind", "0.0.0.0:8000", \
+     "--access-logfile", "-", \
+     "--error-logfile", "-", \
+     "--log-level", "info", \
+     "--timeout", "120", \
+     "--graceful-timeout", "30"]

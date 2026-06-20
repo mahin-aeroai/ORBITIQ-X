@@ -1,0 +1,1 @@
+"""SSA Service stub."""

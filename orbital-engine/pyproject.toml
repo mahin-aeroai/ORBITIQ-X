@@ -1,0 +1,120 @@
+[build-system]
+requires = ["setuptools>=70.0", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "orbitiq-orbital-engine"
+version = "0.1.0"
+description = "ORBITIQ-X High-Fidelity Orbital Mechanics Engine"
+authors = [{ name = "Mahin Nandipa", email = "mahin@orbitiq-x.dev" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+keywords = [
+    "orbital mechanics",
+    "SGP4",
+    "space situational awareness",
+    "astrodynamics",
+    "satellite propagation",
+    "conjunction analysis",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+]
+
+dependencies = [
+    "sgp4>=2.23",
+    "skyfield>=1.49",
+    "astropy>=7.0.0",
+    "numpy>=2.0.0",
+    "scipy>=1.13.0",
+    "python-dateutil>=2.9.0",
+    "structlog>=24.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-benchmark>=4.0.0",
+    "pytest-cov>=6.0.0",
+    "mypy>=1.13.0",
+    "black>=24.0.0",
+    "ruff>=0.8.0",
+    "numpy-stubs>=1.24.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ─── Black ────────────────────────────────────────────────────────────────────
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+# ─── Ruff ─────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+select = [
+    "E", "F", "W",     # pycodestyle + pyflakes
+    "I",               # isort
+    "N",               # pep8-naming
+    "UP",              # pyupgrade
+    "B",               # bugbear
+    "C4",              # comprehensions
+    "SIM",             # simplify
+    "RUF",             # ruff-specific
+]
+ignore = ["E501", "B008", "N803", "N806"]  # Line-length handled by Black; matrix naming
+
+[tool.ruff.per-file-ignores]
+"tests/**" = ["S101"]   # Allow asserts in tests
+
+# ─── mypy ─────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = false
+disallow_any_generics = true
+warn_return_any = true
+warn_unused_ignores = true
+
+# ─── pytest ───────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "-v",
+]
+markers = [
+    "unit: Pure unit tests, no external dependencies",
+    "integration: Requires running services",
+    "benchmark: Performance benchmarks",
+    "slow: Long-running tests (>5s)",
+    "sgp4: SGP4 propagation specific tests",
+    "conjunction: Conjunction analysis tests",
+]
+
+# ─── coverage ─────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "benchmarks/*"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 90
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

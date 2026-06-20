@@ -1,0 +1,39 @@
+# ORBITIQ-X Backend — Development Requirements
+-r base.txt
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+pytest-cov==6.0.0
+pytest-benchmark==4.0.0
+pytest-mock==3.14.0
+pytest-xdist==3.6.1                     # Parallel test execution
+httpx==0.28.1                           # TestClient for FastAPI
+respx==0.21.1                           # Mock httpx requests
+faker==33.1.0
+factory-boy==3.3.1
+
+# ─── Code Quality ─────────────────────────────────────────────────────────────
+black==24.10.0
+ruff==0.8.4
+mypy==1.13.0
+pre-commit==4.0.1
+bandit[toml]==1.8.0
+safety==3.2.11
+
+# ─── Type Stubs ───────────────────────────────────────────────────────────────
+types-redis==4.6.0.20241004
+types-python-dateutil==2.9.0.20241206
+types-pytz==2024.2.0.20241221
+boto3-stubs[s3]==1.35.81
+
+# ─── Dev Utilities ────────────────────────────────────────────────────────────
+ipython==8.30.0
+ipdb==0.13.13
+watchfiles==1.0.3
+python-dotenv==1.0.1
+httpie==3.2.4                           # CLI HTTP client for manual testing
+
+# ─── Documentation ────────────────────────────────────────────────────────────
+mkdocs-material==9.5.47
+mkdocstrings[python]==0.27.0

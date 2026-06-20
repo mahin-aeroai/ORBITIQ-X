@@ -1,0 +1,47 @@
+[
+  {
+    "norad_id": 25544,
+    "sat_name": "ISS (ZARYA)",
+    "intl_designator": "1998-067A",
+    "object_type": "PAYLOAD",
+    "orbit_class": "LEO",
+    "country_code": "ISS",
+    "operator_name": "NASA/ROSCOSMOS",
+    "perigee_km": 418.0,
+    "apogee_km": 420.0,
+    "inclination_deg": 51.64,
+    "period_min": 92.9,
+    "launch_epoch": "1998-11-20",
+    "is_active": true
+  },
+  {
+    "norad_id": 48274,
+    "sat_name": "STARLINK-2145",
+    "intl_designator": "2021-024B",
+    "object_type": "PAYLOAD",
+    "orbit_class": "LEO",
+    "country_code": "US",
+    "operator_name": "SpaceX",
+    "perigee_km": 540.0,
+    "apogee_km": 560.0,
+    "inclination_deg": 53.0,
+    "period_min": 95.5,
+    "launch_epoch": "2021-04-07",
+    "is_active": true
+  },
+  {
+    "norad_id": 55268,
+    "sat_name": "NAVIC-1I",
+    "intl_designator": "2023-001A",
+    "object_type": "PAYLOAD",
+    "orbit_class": "GEO",
+    "country_code": "IN",
+    "operator_name": "ISRO",
+    "perigee_km": 35776.0,
+    "apogee_km": 35798.0,
+    "inclination_deg": 0.1,
+    "period_min": 1436.1,
+    "launch_epoch": "2023-01-01",
+    "is_active": true
+  }
+]
