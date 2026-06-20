@@ -83,6 +83,14 @@ api_v1_router.include_router(
     tags=["Mission Planning"],
 )
 
+# ─── Orbital Digital Twin Engine ─────────────────────────────────────────────
+from app.api.v1.endpoints import digital_twin  # noqa: E402
+api_v1_router.include_router(
+    digital_twin.router,
+    prefix="/digital-twin",
+    tags=["Orbital Digital Twin"],
+)
+
 # ─── Foundation Model Platform ───────────────────────────────────────────────
 from app.api.v1.endpoints import foundation  # noqa: E402
 api_v1_router.include_router(

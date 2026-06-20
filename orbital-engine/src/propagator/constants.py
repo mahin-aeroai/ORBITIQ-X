@@ -94,3 +94,9 @@ CONJUNCTION_SCREENING_RANGE_KM: Final[float] = 5.0  # Initial screening radius
 ATMOSPHERIC_SCALE_HEIGHT_KM: Final[float] = 8.5  # Approximate scale height at surface
 REFERENCE_DENSITY_KG_M3: Final[float] = 1.225    # Air density at sea level [kg/m³]
 STANDARD_DRAG_COEFFICIENT: Final[float] = 2.2     # Typical satellite Cd
+
+# ─── WGS-84 Aliases for coordinate_transforms.py ─────────────────────────────
+WGS84_A: Final[float]        = EARTH_RADIUS_KM               # semi-major axis [km]
+WGS84_B: Final[float]        = EARTH_RADIUS_POLAR_KM         # semi-minor axis [km]
+WGS84_E2: Final[float]       = 2 * EARTH_FLATTENING - EARTH_FLATTENING**2  # e²
+EARTH_ROT_RAD_S: Final[float]= EARTH_ROTATION_RATE_RAD_S    # alias

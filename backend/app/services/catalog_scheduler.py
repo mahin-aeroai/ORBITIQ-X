@@ -251,6 +251,37 @@ async def _run_graph_population() -> None:
         )
 
 
+async def _run_digital_twin_propagation() -> None:
+    """15-minute digital twin propagation — propagate full catalog to current epoch."""
+    from app.digital_twin.services.orbital_state_service import OrbitalStateService
+    from app.digital_twin.services.twin_services import OrbitalDensityEngine
+    from app.digital_twin.repositories.digital_twin_repository import DigitalTwinRepository
+    from app.db.session import get_session_factory
+    from app.db.redis_session import get_redis
+    import uuid
+    run_id = str(uuid.uuid4())[:8]
+    logger.info("digital_twin_propagation_start run=%s", run_id)
+    try:
+        factory = get_session_factory()
+        redis   = get_redis()
+        async with factory() as session:
+            svc     = OrbitalStateService(pg_session=session, redis_client=redis)
+            summary = await svc.propagate_catalog()
+        from app.digital_twin.services.orbital_state_service import get_live_states
+        states = get_live_states()
+        if states:
+            engine  = OrbitalDensityEngine()
+            density = engine.compute_density_map(list(states.values()))
+            repo    = DigitalTwinRepository(redis_client=redis)
+            await repo.save_density_map(density)
+            health = engine.compute_regime_health(density)
+            await repo.save_health(health)
+        logger.info("digital_twin_propagation_complete run=%s objects=%d",
+                    run_id, summary.get("objects_propagated", 0))
+    except Exception as exc:
+        logger.exception("digital_twin_propagation_failed run=%s", run_id)
+
+
 async def _run_full_catalog_sync() -> SyncReport | None:
     """
     6-hour full catalog sync job.
@@ -416,6 +447,15 @@ def build_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=6, start_date="2000-01-01 01:00:00"),
         id="graph_population",
         name="PostgreSQL → Neo4j Graph Population (6h)",
+        replace_existing=True,
+    )
+
+    # Digital twin propagation every 15 minutes
+    scheduler.add_job(
+        func=_run_digital_twin_propagation,
+        trigger=IntervalTrigger(minutes=15),
+        id="digital_twin_propagation",
+        name="Orbital Digital Twin Propagation (15min)",
         replace_existing=True,
     )
 
