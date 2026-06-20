@@ -228,6 +228,29 @@ async def _execute_conjunction_screening(run_id: str, redis) -> None:
         )
 
 
+async def _run_graph_population() -> None:
+    """Periodic PostgreSQL → Neo4j graph population."""
+    from app.db.session import get_session_factory
+    from app.graph.services.graph_population_service import GraphPopulationService
+    from app.graph.connection import is_available
+    import uuid
+
+    if not is_available():
+        logger.info("graph_population_job_skipped — Neo4j not available")
+        return
+
+    run_id = str(uuid.uuid4())[:8]
+    logger.info("graph_population_job_start run=%s", run_id)
+    factory = get_session_factory()
+    async with factory() as session:
+        svc = GraphPopulationService(session)
+        report = await svc.populate_all(run_id=run_id)
+        logger.info(
+            "graph_population_job_complete run=%s status=%s sats=%d",
+            run_id, report.status, report.satellites_synced,
+        )
+
+
 async def _run_full_catalog_sync() -> SyncReport | None:
     """
     6-hour full catalog sync job.
@@ -384,6 +407,15 @@ def build_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=6, start_date="2000-01-01 00:30:00"),
         id="conjunction_screening",
         name="Full Catalog Conjunction Screening (6h)",
+        replace_existing=True,
+    )
+
+    # Graph population every 6 hours (staggered 1h after catalog sync)
+    scheduler.add_job(
+        func=_run_graph_population,
+        trigger=IntervalTrigger(hours=6, start_date="2000-01-01 01:00:00"),
+        id="graph_population",
+        name="PostgreSQL → Neo4j Graph Population (6h)",
         replace_existing=True,
     )
 
