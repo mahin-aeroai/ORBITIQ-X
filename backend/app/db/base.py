@@ -1,30 +1,16 @@
 """
-ORBITIQ-X — SQLAlchemy declarative base + all model imports.
+ORBITIQ-X — SQLAlchemy declarative base + all model imports for Alembic.
 
-This module is the SINGLE import point for Alembic autogenerate.
-Every ORM model must be imported here — if it is not imported,
-Alembic will not detect schema changes for that table.
-
-Import order follows FK dependency graph:
-  users → operators → missions → satellites → tle_records
-        ↘ audit_logs (references all)
-  conjunction_events (references satellites)
-  orbital_events (references satellites)
+Models import Base from app.db.base_model (no circular dependency).
+This file imports Base from base_model and then imports all models,
+giving Alembic a single import point.
 """
-
 from __future__ import annotations
 
-from sqlalchemy.orm import DeclarativeBase
+# Re-export Base so existing code that imports from here still works
+from app.db.base_model import Base  # noqa: F401
 
-
-class Base(DeclarativeBase):
-    """Shared declarative base for all ORBITIQ-X ORM models."""
-
-
-# ── Import every model module so SQLAlchemy registers them ───
-# The imports below cause the mappers to register against Base.metadata.
-# They are not unused — removing any one breaks autogenerate.
-
+# Import all models so Alembic autogenerate sees them
 from app.db.models.users            import User, UserSession         # noqa: F401, E402
 from app.db.models.operators        import Operator                   # noqa: F401, E402
 from app.db.models.satellites       import Satellite                  # noqa: F401, E402

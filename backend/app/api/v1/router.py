@@ -82,3 +82,12 @@ api_v1_router.include_router(
     prefix="/mission",
     tags=["Mission Planning"],
 )
+
+# ─── Catalog / Space-Track Ingestion ──────────────────────────────────────────
+from app.api.v1.endpoints import catalog  # noqa: E402
+
+api_v1_router.include_router(
+    catalog.router,
+    prefix="/catalog",
+    tags=["Catalog — Space-Track Ingestion"],
+)

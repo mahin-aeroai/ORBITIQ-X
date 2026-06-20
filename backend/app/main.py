@@ -49,12 +49,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_redis()
     await init_neo4j()
 
+    # Start catalog sync scheduler (after DB + Redis ready)
+    from app.services.catalog_scheduler import init_scheduler
+    await init_scheduler()
+
     logger.info("orbitiq_x_ready", host=settings.BACKEND_HOST, port=settings.BACKEND_PORT)
 
     yield  # Application runs here
 
     # Graceful shutdown
     logger.info("orbitiq_x_shutting_down")
+    from app.services.catalog_scheduler import shutdown_scheduler
+    await shutdown_scheduler()
     await close_db()
     await close_redis()
     await close_neo4j()
