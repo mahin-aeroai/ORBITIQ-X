@@ -8,6 +8,7 @@ import type { Metadata, Viewport } from "next";
 import { Toaster } from "sonner";
 
 import { QueryProvider } from "@/components/providers/QueryProvider";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { TopNav } from "@/components/ui/TopNav";
 import { SideNav } from "@/components/ui/SideNav";
@@ -82,6 +83,7 @@ export default function RootLayout({
     >
       <body className="bg-space-deep text-space-text antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <AuthProvider>
           <QueryProvider>
             {/* App shell */}
             <div className="flex h-screen overflow-hidden">
@@ -107,6 +109,7 @@ export default function RootLayout({
               }}
             />
           </QueryProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

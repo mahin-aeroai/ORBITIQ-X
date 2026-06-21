@@ -11,14 +11,62 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const V1   = `${BASE}/api/v1`;
 
+// ─── Auth token store (set by AuthProvider) ─────────────────────────────────
+// Module-level reference so apiFetch can attach it without React context.
+// This is intentionally not localStorage — it's reset on page reload.
+
+let _accessToken: string | null = null;
+
+export function setApiAccessToken(token: string | null): void {
+  _accessToken = token;
+}
+
+export function getApiAccessToken(): string | null {
+  return _accessToken;
+}
+
 // ─── Fetch helper ─────────────────────────────────────────────────────────────
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const authHeader: Record<string, string> = _accessToken
+    ? { Authorization: `Bearer ${_accessToken}` }
+    : {};
+
   const res = await fetch(`${V1}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    next:    { revalidate: 0 },   // Always fresh for dashboard data
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader,
+      ...(init?.headers ?? {}),
+    },
+    next: { revalidate: 0 },
     ...init,
   });
+
+  if (res.status === 401) {
+    // Trigger silent refresh via Next.js route handler
+    const refreshed = await fetch("/api/auth/refresh", { method: "POST" });
+    if (refreshed.ok) {
+      const data = await refreshed.json();
+      if (data.access_token) {
+        _accessToken = data.access_token;
+        // Retry the original request with the new token
+        const retryRes = await fetch(`${V1}${path}`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization:  `Bearer ${_accessToken}`,
+            ...(init?.headers ?? {}),
+          },
+          next: { revalidate: 0 },
+          ...init,
+        });
+        if (retryRes.ok) return retryRes.json() as Promise<T>;
+      }
+    }
+    // If refresh failed, redirect to login
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
+  }
+
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`API ${res.status} — ${path}: ${text.slice(0, 200)}`);
@@ -399,3 +447,59 @@ export const fetchFutureConjunctions = (
   limit = 50,
 ): Promise<{ count: number; events: FutureConjunction[] }> =>
   apiFetch(`/digital-twin/conjunctions/future?min_pc=${minPc}&limit=${limit}`);
+
+
+// ─── Platform Observability API (Phase 14B) ────────────────────────────────
+// GET /api/v1/platform/health
+export interface ServiceHealth {
+  status:       string;   // healthy | degraded | unavailable | unhealthy | error | unknown
+  latency_ms?:  number;
+  error?:       string;
+  [key: string]: unknown;
+}
+export interface PlatformHealth {
+  overall:     string;
+  checked_at:  string;
+  elapsed_ms:  number;
+  services: {
+    postgres:          ServiceHealth;
+    redis:             ServiceHealth;
+    neo4j:             ServiceHealth;
+    vector_store:      ServiceHealth;
+    minio:             ServiceHealth;
+    digital_twin:      ServiceHealth;
+    conjunction_engine:ServiceHealth;
+    agents:            ServiceHealth;
+    graphrag:          ServiceHealth;
+    scheduler:         ServiceHealth;
+  };
+}
+export const fetchPlatformHealth = (): Promise<PlatformHealth> =>
+  apiFetch<PlatformHealth>("/platform/health");
+
+// GET /api/v1/platform/status
+export interface PlatformStatus {
+  checked_at:  string;
+  scheduler: {
+    status:    string;
+    job_count: number;
+    jobs:      Array<{ id: string; name: string; next_run_utc: string | null }>;
+  };
+  catalog: {
+    status?:         string;
+    last_sync?:      string;
+    satellites?:     number;
+    sync_mode?:      string;
+    failure_reason?: string;
+    error?:          string;
+  };
+  digital_twin: {
+    objects_propagated?:  number;
+    last_propagation?:    string;
+    propagation_seconds?: number;
+    live_objects?:        number;
+    error?:               string;
+  };
+}
+export const fetchPlatformStatus = (): Promise<PlatformStatus> =>
+  apiFetch<PlatformStatus>("/platform/status");

@@ -2,9 +2,24 @@
 ORBITIQ-X — API v1 Router
 ==========================
 Aggregates all domain-specific routers under the /api/v1 prefix.
-Each domain router handles its own sub-prefix and authentication.
+RBAC protection is applied at the router level via FastAPI dependencies.
+
+Access matrix (Phase 14A)
+──────────────────────────
+  /auth/*          public
+  /satellites/*    any authenticated user
+  /space-weather/* any authenticated user
+  /mission/*       analyst | operator | admin
+  /ssa/*           operator | admin
+  /conjunctions/*  operator | admin
+  /digital-twin/*  operator | admin
+  /agents/*        analyst | admin
+  /knowledge-graph/* analyst | admin
+  /rag/*           analyst | admin
+  /catalog/*       operator | admin
+  /foundation/*    admin only
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.api.v1.endpoints import (
     satellites,
@@ -17,6 +32,17 @@ from app.api.v1.endpoints import (
     space_weather,
     auth,
 )
+from app.core.security.deps import (
+    require_min_role,
+    require_roles,
+    get_current_user,
+)
+
+# Pre-built dependency shortcuts
+_any_auth    = Depends(get_current_user)
+_analyst     = Depends(require_min_role("analyst"))
+_operator    = Depends(require_min_role("operator"))
+_admin       = Depends(require_roles("admin"))
 
 api_v1_router = APIRouter()
 
@@ -32,6 +58,7 @@ api_v1_router.include_router(
     satellites.router,
     prefix="/satellites",
     tags=["Satellite Catalog"],
+    dependencies=[_any_auth],
 )
 
 # ─── Space Situational Awareness ──────────────────────────────────────────────
@@ -39,6 +66,7 @@ api_v1_router.include_router(
     ssa.router,
     prefix="/ssa",
     tags=["Space Situational Awareness"],
+    dependencies=[_operator],
 )
 
 # ─── Conjunctions & Collision Avoidance ───────────────────────────────────────
@@ -46,6 +74,7 @@ api_v1_router.include_router(
     conjunctions.router,
     prefix="/conjunctions",
     tags=["Conjunction Analysis"],
+    dependencies=[_operator],
 )
 
 # ─── Space Weather ────────────────────────────────────────────────────────────
@@ -53,6 +82,7 @@ api_v1_router.include_router(
     space_weather.router,
     prefix="/space-weather",
     tags=["Space Weather"],
+    dependencies=[_any_auth],
 )
 
 # ─── Knowledge Graph ──────────────────────────────────────────────────────────
@@ -60,6 +90,7 @@ api_v1_router.include_router(
     knowledge_graph.router,
     prefix="/knowledge-graph",
     tags=["Knowledge Graph"],
+    dependencies=[_analyst],
 )
 
 # ─── RAG / AI Q&A ─────────────────────────────────────────────────────────────
@@ -67,6 +98,7 @@ api_v1_router.include_router(
     rag.router,
     prefix="/rag",
     tags=["RAG — Aerospace Q&A"],
+    dependencies=[_analyst],
 )
 
 # ─── Multi-Agent System ───────────────────────────────────────────────────────
@@ -74,6 +106,7 @@ api_v1_router.include_router(
     agents.router,
     prefix="/agents",
     tags=["Multi-Agent Reasoning"],
+    dependencies=[_analyst],
 )
 
 # ─── Mission Planning ─────────────────────────────────────────────────────────
@@ -81,6 +114,7 @@ api_v1_router.include_router(
     mission.router,
     prefix="/mission",
     tags=["Mission Planning"],
+    dependencies=[_analyst],
 )
 
 # ─── SSA Conjunction Assessment (Phase 12) ────────────────────────────────────
@@ -89,6 +123,7 @@ api_v1_router.include_router(
     ssa_conjunctions.router,
     prefix="/ssa",
     tags=["SSA — Conjunction Assessment"],
+    dependencies=[_operator],
 )
 
 # ─── SSA Alert SSE Bridge (Phase 13B) ─────────────────────────────────────────
@@ -97,6 +132,7 @@ api_v1_router.include_router(
     ssa_alerts.router,
     prefix="/ssa",
     tags=["SSA — Alert Stream"],
+    dependencies=[_operator],
 )
 
 # ─── Orbital Digital Twin Engine ─────────────────────────────────────────────
@@ -105,6 +141,7 @@ api_v1_router.include_router(
     digital_twin.router,
     prefix="/digital-twin",
     tags=["Orbital Digital Twin"],
+    dependencies=[_operator],
 )
 
 # ─── Foundation Model Platform ───────────────────────────────────────────────
@@ -113,6 +150,7 @@ api_v1_router.include_router(
     foundation.router,
     prefix="/foundation",
     tags=["Foundation Model Platform"],
+    dependencies=[_admin],
 )
 
 # ─── Catalog / Space-Track Ingestion ──────────────────────────────────────────
@@ -122,6 +160,16 @@ api_v1_router.include_router(
     catalog.router,
     prefix="/catalog",
     tags=["Catalog — Space-Track Ingestion"],
+    dependencies=[_operator],
+)
+
+# ─── Platform Observability ───────────────────────────────────────────────────
+from app.api.v1.endpoints import platform  # noqa: E402
+api_v1_router.include_router(
+    platform.router,
+    prefix="/platform",
+    tags=["Platform Observability"],
+    dependencies=[_any_auth],
 )
 
 # ─── CDM Document (separate path) ────────────────────────────────────────────

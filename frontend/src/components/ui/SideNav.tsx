@@ -34,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/conjunctions",    label: "Conjunctions",    icon: "⚠", minRole: "operator" },
   { href: "/agents",          label: "Agents",          icon: "◈", minRole: "analyst"  },
   { href: "/knowledge-graph", label: "Knowledge Graph", icon: "◎", minRole: "analyst"  },
+  { href: "/system",          label: "System Status",   icon: "⊛", minRole: "analyst"  },
   { href: "/foundation",      label: "Foundation",      icon: "◧", minRole: "admin"    },
 ];
 

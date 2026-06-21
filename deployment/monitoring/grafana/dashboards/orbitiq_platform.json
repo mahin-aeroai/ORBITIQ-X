@@ -1,0 +1,121 @@
+{
+  "title": "ORBITIQ-X Platform Overview",
+  "uid": "orbitiq-platform-v1",
+  "description": "Unified operational dashboard — service health, scheduler, API performance, auth",
+  "tags": ["orbitiq", "platform"],
+  "timezone": "utc",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "gridPos": { "h": 4, "w": 3, "x": 0, "y": 0 },
+      "title": "Redis Available",
+      "targets": [{ "expr": "orbitiq_redis_available", "legendFormat": "" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [
+        { "value": 0, "color": "red" }, { "value": 1, "color": "green" }
+      ] }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }] } }
+    },
+    {
+      "id": 2, "type": "stat", "gridPos": { "h": 4, "w": 3, "x": 3, "y": 0 },
+      "title": "Neo4j Available",
+      "targets": [{ "expr": "orbitiq_neo4j_available", "legendFormat": "" }],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [
+        { "value": 0, "color": "red" }, { "value": 1, "color": "green" }
+      ] }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }] } }
+    },
+    {
+      "id": 3, "type": "stat", "gridPos": { "h": 4, "w": 3, "x": 6, "y": 0 },
+      "title": "Vector Store Available",
+      "targets": [{ "expr": "orbitiq_vector_store_available", "legendFormat": "" }],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [
+        { "value": 0, "color": "red" }, { "value": 1, "color": "green" }
+      ] }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }] } }
+    },
+    {
+      "id": 4, "type": "stat", "gridPos": { "h": 4, "w": 3, "x": 9, "y": 0 },
+      "title": "MinIO Available",
+      "targets": [{ "expr": "orbitiq_minio_available", "legendFormat": "" }],
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [
+        { "value": 0, "color": "red" }, { "value": 1, "color": "green" }
+      ] }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }] } }
+    },
+    {
+      "id": 10, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "title": "API Request Rate (req/s)",
+      "targets": [
+        { "expr": "rate(http_requests_total[1m])", "legendFormat": "{{method}} {{handler}}" }
+      ],
+      "yaxes": [{ "label": "req/s", "min": 0 }, {}]
+    },
+    {
+      "id": 11, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "title": "API P95 Latency (ms)",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) * 1000",
+          "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket[5m])) * 1000",
+          "legendFormat": "p50" }
+      ],
+      "yaxes": [{ "label": "ms", "min": 0 }, {}]
+    },
+    {
+      "id": 20, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "title": "Orbital Propagation Duration (s)",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(orbitiq_propagation_duration_seconds_bucket[15m]))",
+          "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.50, rate(orbitiq_propagation_duration_seconds_bucket[15m]))",
+          "legendFormat": "p50" }
+      ],
+      "yaxes": [{ "label": "seconds", "min": 0 }, {}]
+    },
+    {
+      "id": 21, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "title": "Conjunction Screening Duration (s)",
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(orbitiq_conjunction_screening_duration_seconds_bucket[30m]))",
+          "legendFormat": "p95 screening" }
+      ],
+      "yaxes": [{ "label": "seconds", "min": 0 }, {}]
+    },
+    {
+      "id": 30, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "title": "Scheduler Job Failures",
+      "targets": [
+        { "expr": "increase(orbitiq_scheduler_job_failures_total[1h])",
+          "legendFormat": "{{job}}" }
+      ],
+      "yaxes": [{ "label": "failures/h", "min": 0 }, {}]
+    },
+    {
+      "id": 31, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "title": "Auth Failures by Reason",
+      "targets": [
+        { "expr": "rate(orbitiq_auth_failures_total[5m])",
+          "legendFormat": "{{reason}}" }
+      ],
+      "yaxes": [{ "label": "failures/s", "min": 0 }, {}]
+    },
+    {
+      "id": 40, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+      "title": "Conjunction Events Created",
+      "targets": [
+        { "expr": "increase(orbitiq_conjunction_events_created_total[6h])",
+          "legendFormat": "{{risk_level}}" }
+      ],
+      "yaxes": [{ "label": "events/6h", "min": 0 }, {}]
+    },
+    {
+      "id": 41, "type": "graph", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 28 },
+      "title": "Agent Execution Duration (p90)",
+      "targets": [
+        { "expr": "histogram_quantile(0.90, rate(orbitiq_agent_execution_duration_seconds_bucket[10m]))",
+          "legendFormat": "{{task_type}}" }
+      ],
+      "yaxes": [{ "label": "seconds", "min": 0 }, {}]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

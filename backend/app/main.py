@@ -21,6 +21,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from app.api.v1.router import api_v1_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.tracing import init_tracing
 from app.db.session import close_db, init_db
 from app.db.neo4j_session import close_neo4j, init_neo4j
 from app.db.redis_session import close_redis, init_redis
@@ -38,6 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     gracefully close connections on shutdown.
     """
     configure_logging(level=settings.ORBITIQ_LOG_LEVEL)
+    init_tracing(app=app)   # OpenTelemetry — no-op if SDK unavailable
     logger.info(
         "orbitiq_x_starting",
         version=settings.ORBITIQ_VERSION,

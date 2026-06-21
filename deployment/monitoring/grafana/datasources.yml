@@ -1,0 +1,18 @@
+## ORBITIQ-X — Grafana Datasource Provisioning
+## ================================================
+## Auto-provisioned on container start.
+## Grafana reads this from /etc/grafana/provisioning/datasources/
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+    version: 1
+    editable: false

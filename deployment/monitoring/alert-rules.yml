@@ -1,0 +1,240 @@
+## ORBITIQ-X — Prometheus Alerting Rules
+## =========================================
+## Covers: infrastructure availability, scheduler health,
+##         propagation freshness, conjunction pipeline,
+##         API performance, and authentication anomalies.
+##
+## Severity levels:
+##   critical  — immediate human action required (PagerDuty / wake on-call)
+##   warning   — investigate within business hours
+##   info      — awareness only
+
+groups:
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Infrastructure Availability
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: orbitiq_infrastructure
+    interval: 30s
+    rules:
+
+      - alert: RedisUnavailable
+        expr: orbitiq_redis_available == 0
+        for: 2m
+        labels:
+          severity: warning
+          service:  redis
+        annotations:
+          summary:     "ORBITIQ-X Redis is unavailable"
+          description: >
+            Redis has been unreachable for {{ $value }} minutes.
+            Conjunction alert SSE stream and catalog caching are degraded.
+            Check Redis container / connection credentials.
+
+      - alert: Neo4jUnavailable
+        expr: orbitiq_neo4j_available == 0
+        for: 5m
+        labels:
+          severity: warning
+          service:  neo4j
+        annotations:
+          summary:     "ORBITIQ-X Neo4j Knowledge Graph is unavailable"
+          description: >
+            Neo4j has been unreachable for {{ $value }} minutes.
+            GraphRAG, knowledge graph queries, and future conjunction
+            forecasting are degraded. Check Neo4j container.
+
+      - alert: VectorStoreUnavailable
+        expr: orbitiq_vector_store_available == 0
+        for: 10m
+        labels:
+          severity: warning
+          service:  vector_store
+        annotations:
+          summary:     "ORBITIQ-X vector store (Qdrant/Weaviate) unavailable"
+          description: >
+            The RAG pipeline vector store has been unreachable.
+            Document retrieval in GraphRAG is degraded.
+
+      - alert: MinioUnavailable
+        expr: orbitiq_minio_available == 0
+        for: 5m
+        labels:
+          severity: warning
+          service:  minio
+        annotations:
+          summary:     "ORBITIQ-X MinIO object storage is unavailable"
+          description: >
+            MinIO has been unreachable for {{ $value }} minutes.
+            TLE archive storage and model artifact uploads are degraded.
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Scheduler Health
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: orbitiq_scheduler
+    interval: 60s
+    rules:
+
+      - alert: SchedulerJobStalled
+        expr: >
+          increase(orbitiq_scheduler_job_failures_total[1h]) > 3
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Scheduler job {{ $labels.job }} has failed 3+ times in 1h"
+          description: >
+            The scheduled job "{{ $labels.job }}" has failed more than 3
+            times in the last hour. Check logs for root cause.
+
+      - alert: CatalogSyncStalled
+        expr: >
+          (time() - orbitiq_scheduler_last_run_timestamp_seconds{job="full_catalog_sync"}) > 28800
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "Space-Track catalog sync has not run in >8 hours"
+          description: >
+            The full catalog sync last ran
+            {{ humanizeDuration $value }} ago. TLE data may be stale.
+            Check Space-Track credentials and connectivity.
+
+      - alert: ConjunctionScreeningStalled
+        expr: >
+          (time() - orbitiq_scheduler_last_run_timestamp_seconds{job="conjunction_screening"}) > 25200
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary:     "Conjunction screening has not run in >7 hours"
+          description: >
+            Conjunction screening last ran {{ humanizeDuration $value }} ago.
+            High-risk events may be missed. Check scheduler logs.
+
+      - alert: DigitalTwinPropagationStalled
+        expr: >
+          (time() - orbitiq_scheduler_last_run_timestamp_seconds{job="digital_twin_propagation"}) > 1800
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Digital Twin propagation has not run in >30 minutes"
+          description: >
+            Orbital positions may be stale. The last propagation ran
+            {{ humanizeDuration $value }} ago (expected every 15 min).
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # API Performance
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: orbitiq_api
+    interval: 30s
+    rules:
+
+      - alert: HighAPIErrorRate
+        expr: >
+          rate(http_requests_total{status=~"5.."}[5m])
+          / rate(http_requests_total[5m]) > 0.05
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "API 5xx error rate exceeds 5%"
+          description: >
+            {{ $value | humanizePercentage }} of requests are returning 5xx.
+            Investigate application logs for exceptions.
+
+      - alert: HighAPILatency
+        expr: >
+          histogram_quantile(0.95,
+            rate(http_request_duration_seconds_bucket[5m])
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "API p95 latency exceeds 5 seconds"
+          description: >
+            The 95th percentile API latency is {{ $value | humanizeDuration }}.
+            Consider checking database query plans or connection pool saturation.
+
+      - alert: AgentExecutionSlow
+        expr: >
+          histogram_quantile(0.90,
+            rate(orbitiq_agent_execution_duration_seconds_bucket[10m])
+          ) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Agent task p90 execution time exceeds 60s"
+          description: >
+            Multi-agent tasks are taking {{ $value | humanizeDuration }} at p90.
+            Check Anthropic API latency and LangGraph step count.
+
+      - alert: PropagationSlow
+        expr: >
+          histogram_quantile(0.90,
+            rate(orbitiq_propagation_duration_seconds_bucket[30m])
+          ) > 300
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Orbital propagation takes >5 minutes at p90"
+          description: >
+            Catalog propagation is taking {{ $value | humanizeDuration }}.
+            Consider reducing catalog size or increasing worker threads.
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Authentication
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: orbitiq_auth
+    interval: 60s
+    rules:
+
+      - alert: AuthFailureSpike
+        expr: >
+          rate(orbitiq_auth_failures_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "Authentication failure rate spike detected"
+          description: >
+            {{ $value | humanize }} auth failures per second in the last 5 minutes.
+            This may indicate a brute-force or credential stuffing attack.
+            Check audit_logs table for source IPs.
+
+      - alert: HighAuthFailuresByReason
+        expr: >
+          increase(orbitiq_auth_failures_total{reason="invalid_credentials"}[15m]) > 20
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary:     "20+ invalid credential failures in 15 minutes"
+          description: >
+            {{ $value }} failed logins with invalid_credentials in 15 minutes.
+            Possible brute-force attack. Review audit logs and consider
+            IP allowlisting.
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Conjunction Pipeline
+  # ────────────────────────────────────────────────────────────────────────────
+  - name: orbitiq_conjunction
+    interval: 60s
+    rules:
+
+      - alert: HighRedConjunctionCount
+        expr: >
+          increase(orbitiq_conjunction_events_created_total{risk_level="red"}[6h]) > 10
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary:     "10+ RED conjunction events created in the last 6 hours"
+          description: >
+            {{ $value }} RED-level conjunction events (Pc ≥ 1e-3) were persisted
+            in the last 6-hour screening cycle. Review active alerts in the
+            Mission Control dashboard.
