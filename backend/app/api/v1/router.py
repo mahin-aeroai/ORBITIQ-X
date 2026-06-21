@@ -91,6 +91,14 @@ api_v1_router.include_router(
     tags=["SSA — Conjunction Assessment"],
 )
 
+# ─── SSA Alert SSE Bridge (Phase 13B) ─────────────────────────────────────────
+from app.api.v1.endpoints import ssa_alerts  # noqa: E402
+api_v1_router.include_router(
+    ssa_alerts.router,
+    prefix="/ssa",
+    tags=["SSA — Alert Stream"],
+)
+
 # ─── Orbital Digital Twin Engine ─────────────────────────────────────────────
 from app.api.v1.endpoints import digital_twin  # noqa: E402
 api_v1_router.include_router(

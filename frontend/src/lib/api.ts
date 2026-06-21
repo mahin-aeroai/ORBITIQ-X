@@ -1,0 +1,180 @@
+/**
+ * ORBITIQ-X — API Client
+ * =======================
+ * Typed fetch wrappers for all Phase 13B backend endpoints.
+ * All URLs match the verified router.py contracts.
+ *
+ * Base URL:  NEXT_PUBLIC_API_URL (default: http://localhost:8000)
+ * API prefix: /api/v1
+ */
+
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const V1   = `${BASE}/api/v1`;
+
+// ─── Fetch helper ─────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${V1}${path}`, {
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    next:    { revalidate: 0 },   // Always fresh for dashboard data
+    ...init,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`API ${res.status} — ${path}: ${text.slice(0, 200)}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+// ─── SSA Statistics (DashboardMetricsBar) ─────────────────────────────────────
+// Endpoint: GET /api/v1/ssa/statistics
+// Source:   ssa_conjunctions.py → get_ssa_statistics()
+
+export interface SSAStatistics {
+  total_events:            number;
+  unresolved_total:        number;
+  by_risk:                 Record<string, number>;
+  maneuver_required_count: number;
+  avg_miss_distance_km:    number | null;
+  max_pc:                  number | null;
+  screening_coverage:      string;
+  graph_conjunctions:      number;
+  risk_thresholds:         Record<string, string>;
+  pc_method:               string;
+  ccsds_standard:          string;
+}
+
+export const fetchSSAStatistics = (): Promise<SSAStatistics> =>
+  apiFetch<SSAStatistics>("/ssa/statistics");
+
+
+// ─── Catalog Health (CatalogStatsCard + MissionStatusCard) ───────────────────
+// Endpoint: GET /api/v1/catalog/health
+// Source:   catalog.py → get_catalog_health()
+
+export interface CatalogHealth {
+  overall:                    "healthy" | "degraded" | "unhealthy";
+  spacetrack_reachable:       boolean;
+  spacetrack_authenticated:   boolean;
+  spacetrack_latency_ms:      number;
+  database_ok:                boolean;
+  database_satellite_count:   number;
+  last_sync_status:           string | null;
+  last_sync_age_minutes:      number | null;
+  checked_at:                 string;
+  warnings:                   string[];
+}
+
+export const fetchCatalogHealth = (): Promise<CatalogHealth> =>
+  apiFetch<CatalogHealth>("/catalog/health");
+
+
+// ─── Catalog Status (CatalogStatsCard) ───────────────────────────────────────
+// Endpoint: GET /api/v1/catalog/status
+// Source:   catalog.py → get_catalog_status()
+
+export interface CatalogStatus {
+  sync_id:              string | null;
+  status:               string;
+  sync_mode:            string | null;
+  started_at:           string | null;
+  completed_at:         string | null;
+  duration_seconds:     number | null;
+  downloaded_records:   number;
+  total_parsed:         number;
+  inserted:             number;
+  duplicates:           number;
+  satellites_updated:   number;
+  parse_errors:         number;
+  stale_satellite_count:number;
+  failure_reason:       string | null;
+  phases_completed:     string[];
+}
+
+export const fetchCatalogStatus = (): Promise<CatalogStatus> =>
+  apiFetch<CatalogStatus>("/catalog/status");
+
+
+// ─── Space Weather (SpaceWeatherWidget) ───────────────────────────────────────
+// Endpoint: GET /api/v1/digital-twin/weather
+// Source:   digital_twin.py → get_space_weather()
+
+export interface SpaceWeatherData {
+  timestamp:                      string;
+  kp_index:                       number;
+  f107_solar_flux:                number;
+  ap_index:                       number;
+  sunspot_number:                 number;
+  geomagnetic_storm:              "NONE" | "G1" | "G2" | "G3" | "G4" | "G5";
+  solar_radiation_storm:          "NONE" | "S1" | "S2" | "S3" | "S4" | "S5";
+  radio_blackout:                 "NONE" | "R1" | "R2" | "R3" | "R4" | "R5";
+  atmospheric_density_scale_factor: number;
+  // Backend may also return these as flat fields
+  source?:                        string;
+  next_update?:                   string;
+}
+
+export const fetchSpaceWeather = (): Promise<SpaceWeatherData> =>
+  apiFetch<SpaceWeatherData>("/digital-twin/weather");
+
+
+// ─── High-Risk Conjunctions (ConjunctionAlertPanel) ──────────────────────────
+// Endpoint: GET /api/v1/ssa/conjunctions/high-risk?limit=20
+// Source:   ssa_conjunctions.py → get_high_risk_conjunctions()
+
+export interface ConjunctionItem {
+  id:                          number;
+  conjunction_id:              string;
+  primary:                     { norad: number; name: string; type: string };
+  secondary:                   { norad: number; name: string; type: string };
+  tca:                         string | null;
+  miss_distance_km:            number;
+  relative_velocity_kms:       number;
+  collision_probability:       number;
+  risk_level:                  "red" | "yellow" | "green" | "white";
+  maneuver_required:           boolean;
+  maneuver_window_close:       string | null;
+  maneuver_window_hours_remaining: number | null;
+  maneuver_urgency:            "CRITICAL" | "HIGH" | "ELEVATED" | "MONITOR";
+  recommended_dv_kms:          number | null;
+  resolved:                    boolean;
+  created_at:                  string | null;
+}
+
+export interface HighRiskConjunctionsResponse {
+  count: number;
+  items: ConjunctionItem[];
+  note:  string;
+}
+
+export const fetchHighRiskConjunctions = (limit = 20): Promise<HighRiskConjunctionsResponse> =>
+  apiFetch<HighRiskConjunctionsResponse>(`/ssa/conjunctions/high-risk?limit=${limit}`);
+
+
+// ─── Agent Tasks (AgentActivityFeed) ──────────────────────────────────────────
+// Endpoint: GET /api/v1/agents/tasks?limit=10
+// Source:   agents.py → list_recent_tasks()
+
+export interface AgentTaskStatus {
+  task_id:          string;
+  status:           "queued" | "running" | "waiting_human" | "completed" | "failed" | "cancelled";
+  query:            string;
+  task_type:        string;
+  submitted_at:     string;
+  completed_at:     string | null;
+  agents_invoked:   string[];
+  latency_ms:       number | null;
+  error_message:    string | null;
+  query_intent?:    string;
+  confidence?:      number;
+}
+
+export const fetchAgentTasks = (limit = 10): Promise<AgentTaskStatus[]> =>
+  apiFetch<AgentTaskStatus[]>(`/agents/tasks?limit=${limit}`);
+
+
+// ─── SSE — Conjunction Alert Stream ──────────────────────────────────────────
+// Endpoint: GET /api/v1/ssa/alerts/stream  (Phase 13B SSE bridge)
+// Returns:  text/event-stream — Redis pub/sub conjunction alerts
+
+export const CONJUNCTION_SSE_URL = `${V1}/ssa/alerts/stream`;
