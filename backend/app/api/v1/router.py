@@ -83,6 +83,14 @@ api_v1_router.include_router(
     tags=["Mission Planning"],
 )
 
+# ─── SSA Conjunction Assessment (Phase 12) ────────────────────────────────────
+from app.api.v1.endpoints import ssa_conjunctions  # noqa: E402
+api_v1_router.include_router(
+    ssa_conjunctions.router,
+    prefix="/ssa",
+    tags=["SSA — Conjunction Assessment"],
+)
+
 # ─── Orbital Digital Twin Engine ─────────────────────────────────────────────
 from app.api.v1.endpoints import digital_twin  # noqa: E402
 api_v1_router.include_router(
