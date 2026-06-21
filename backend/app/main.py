@@ -130,6 +130,32 @@ def _register_middleware(app: FastAPI) -> None:
     # GZip compression for large orbital datasets
     app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+    # Security headers — applied to every response
+    @app.middleware("http")
+    async def security_headers_middleware(request: Request, call_next) -> Response:
+        response: Response = await call_next(request)
+        # Prevent clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        # Prevent MIME sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # XSS protection for older browsers
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        # Referrer policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Permissions policy — restrict powerful browser APIs
+        response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+        # HSTS — only in production over HTTPS
+        if settings.ORBITIQ_ENV == "production":
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=63072000; includeSubDomains; preload"
+            )
+        # CSP — restrictive policy for API; frontend has its own CSP
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'none'; "
+            "frame-ancestors 'none'"
+        )
+        return response
+
     # Request timing & request-ID injection
     @app.middleware("http")
     async def request_context_middleware(request: Request, call_next) -> Response:

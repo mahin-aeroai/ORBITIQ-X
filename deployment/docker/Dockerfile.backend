@@ -3,9 +3,16 @@
 # =============================================================================
 # Multi-stage build: builder → runtime
 # Target image: ~400MB (Python 3.11 slim + compiled dependencies)
+#
+# Security
+# ─────────
+#   Runs as non-root user orbitiq:1001
+#   No SUID/SGID binaries in runtime image
+#   Build dependencies stripped from runtime stage
+#   entrypoint.sh runs migrations before server start
 # =============================================================================
 
-# ─── Stage 1: Builder ────────────────────────────────────────────────────────
+# ─── Stage 1: Builder ─────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
 
 # Build-time dependencies for Python extensions (numpy, scipy, sgp4 C extension)
@@ -33,10 +40,11 @@ LABEL maintainer="Mahin Nandipa <mahin@orbitiq-x.dev>" \
       version="0.1.0" \
       description="ORBITIQ-X Backend — Aerospace Foundation Model API"
 
-# Runtime system dependencies
+# Runtime system dependencies + psycopg2 for entrypoint PG check
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libopenblas0 \
     curl \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 1001 orbitiq \
     && useradd --uid 1001 --gid 1001 --shell /bin/bash --no-create-home orbitiq
@@ -46,8 +54,18 @@ COPY --from=builder /install /usr/local
 
 WORKDIR /app
 
-# Copy application source
-COPY backend/app ./app
+# Copy application source and migration tooling
+COPY backend/app            ./app
+COPY backend/alembic        ./alembic
+COPY backend/alembic.ini    ./alembic.ini
+COPY backend/migrate.py     ./migrate.py
+COPY backend/entrypoint.sh  ./entrypoint.sh
+
+# Install psycopg2 for entrypoint PG readiness check (sync driver)
+RUN pip install psycopg2-binary --no-deps --quiet
+
+# Make entrypoint executable
+RUN chmod +x ./entrypoint.sh
 
 # Security: run as non-root
 USER orbitiq
@@ -55,8 +73,11 @@ USER orbitiq
 EXPOSE 8000
 
 # Health check for Docker / Kubernetes
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
+
+# Entrypoint runs migrations before starting the server
+ENTRYPOINT ["./entrypoint.sh"]
 
 # Production server: gunicorn with uvicorn workers
 CMD ["gunicorn", "app.main:app", \
@@ -67,4 +88,6 @@ CMD ["gunicorn", "app.main:app", \
      "--error-logfile", "-", \
      "--log-level", "info", \
      "--timeout", "120", \
-     "--graceful-timeout", "30"]
+     "--graceful-timeout", "30", \
+     "--max-requests", "1000", \
+     "--max-requests-jitter", "100"]

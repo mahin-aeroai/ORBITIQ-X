@@ -1,0 +1,78 @@
+# =============================================================================
+# ORBITIQ-X Frontend — Production Dockerfile
+# =============================================================================
+# Multi-stage build: deps → builder → runtime
+# Uses Next.js standalone output (set in next.config.js: output: 'standalone')
+# Target image: ~200MB (Node 20 Alpine)
+#
+# Security
+# ─────────
+#   Runs as non-root user nextjs:1001
+#   Production-only node_modules in runtime stage
+#   Source files not copied to runtime
+# =============================================================================
+
+# ─── Stage 1: Dependencies ────────────────────────────────────────────────────
+FROM node:20-alpine AS deps
+
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci --only=production --ignore-scripts
+
+# ─── Stage 2: Builder ─────────────────────────────────────────────────────────
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy all deps (including devDeps for build)
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+
+# Copy source
+COPY frontend/ .
+
+# Build args for public env vars
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ARG NEXT_PUBLIC_CESIUM_ION_TOKEN=""
+ARG NODE_ENV=production
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NODE_ENV=${NODE_ENV} \
+    NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+    NEXT_PUBLIC_CESIUM_ION_TOKEN=${NEXT_PUBLIC_CESIUM_ION_TOKEN} \
+    NEXT_OPTIMIZE_FONTS=false
+
+RUN npm run build
+
+# ─── Stage 3: Runtime ─────────────────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+
+LABEL maintainer="Mahin Nandipa <mahin@orbitiq-x.dev>" \
+      version="0.1.0" \
+      description="ORBITIQ-X Frontend — Mission Control Dashboard"
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000
+
+RUN addgroup --gid 1001 nextjs \
+    && adduser --uid 1001 --gid 1001 --disabled-password --gecos "" nextjs
+
+WORKDIR /app
+
+# Copy standalone build from builder
+COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nextjs /app/public ./public
+
+USER nextjs
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD wget -q --spider http://localhost:3000/ || exit 1
+
+CMD ["node", "server.js"]
