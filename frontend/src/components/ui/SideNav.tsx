@@ -2,31 +2,60 @@
 /**
  * ORBITIQ-X — SideNav
  * =====================
- * Left sidebar navigation for mission control modules.
- * Collapsed to icon-only on narrow viewports.
+ * Role-aware left sidebar navigation.
+ * Items are filtered by the current user's minimum required role.
+ *
+ * Access matrix (mirrors router.py RBAC)
+ * ─────────────────────────────────────────
+ *   Dashboard      — any authenticated user
+ *   Catalog        — operator | admin
+ *   Conjunctions   — operator | admin
+ *   Agents         — analyst | admin
+ *   Knowledge Graph— analyst | admin
+ *   Foundation     — admin only
  */
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth, type UserRole } from "@/components/providers/AuthProvider";
 
-const NAV_ITEMS = [
-  { href: "/",               label: "Dashboard",      icon: "⊕" },
-  { href: "/catalog",        label: "Catalog",        icon: "◫" },
-  { href: "/conjunctions",   label: "Conjunctions",   icon: "⚠" },
-  { href: "/agents",         label: "Agents",         icon: "◈" },
-  { href: "/knowledge-graph",label: "Knowledge Graph",icon: "◎" },
-  { href: "/foundation",     label: "Foundation",     icon: "◧" },
-] as const;
+// ─── Nav item definitions ─────────────────────────────────────────────────────
+
+interface NavItem {
+  href:     string;
+  label:    string;
+  icon:     string;
+  minRole?: UserRole;   // undefined = any authenticated user
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/",                label: "Dashboard",       icon: "⊕" },
+  { href: "/catalog",         label: "Catalog",         icon: "◫", minRole: "operator" },
+  { href: "/conjunctions",    label: "Conjunctions",    icon: "⚠", minRole: "operator" },
+  { href: "/agents",          label: "Agents",          icon: "◈", minRole: "analyst"  },
+  { href: "/knowledge-graph", label: "Knowledge Graph", icon: "◎", minRole: "analyst"  },
+  { href: "/foundation",      label: "Foundation",      icon: "◧", minRole: "admin"    },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SideNav() {
-  const pathname = usePathname();
+  const pathname          = usePathname();
+  const { hasMinRole, isAuthenticated } = useAuth();
+
+  // Filter nav items by role
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (!isAuthenticated) return false;
+    if (!item.minRole)    return true;       // any auth user
+    return hasMinRole(item.minRole);
+  });
 
   return (
     <nav
       className="flex w-12 flex-col items-center gap-1 border-r border-space-border bg-space-midnight py-3 lg:w-48 lg:items-start lg:px-3"
       aria-label="Primary navigation"
     >
-      {NAV_ITEMS.map(({ href, label, icon }) => {
+      {visibleItems.map(({ href, label, icon }) => {
         const active = pathname === href || (href !== "/" && pathname.startsWith(href));
         return (
           <Link
