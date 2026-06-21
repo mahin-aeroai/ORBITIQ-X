@@ -178,3 +178,62 @@ export const fetchAgentTasks = (limit = 10): Promise<AgentTaskStatus[]> =>
 // Returns:  text/event-stream — Redis pub/sub conjunction alerts
 
 export const CONJUNCTION_SSE_URL = `${V1}/ssa/alerts/stream`;
+
+
+// ─── Cesium Globe States (OrbitalGlobe) ───────────────────────────────────────
+// Endpoint: GET /api/v1/digital-twin/cesium/states?limit=10000
+// Source:   digital_twin.py → get_cesium_states()
+// Verified response shape from actual endpoint code.
+
+export interface CesiumSatObject {
+  id:       number;       // NORAD catalog number
+  name:     string;
+  type:     string;       // "PAYLOAD" | "ROCKET_BODY" | "DEBRIS" | "UNKNOWN"
+  regime:   string;       // "LEO" | "MEO" | "GEO" | "SSO" | "VLEO" | "HEO" | "UNKNOWN"
+  lat:      number;       // geodetic latitude [deg]
+  lon:      number;       // geodetic longitude [deg]
+  alt_km:   number;       // altitude above WGS-84 ellipsoid [km]
+  speed:    number;       // orbital speed [km/s]
+  pos_eci:  [number, number, number];  // ECI J2000 [km]
+}
+
+export interface CesiumStatesResponse {
+  epoch:          string | null;
+  count:          number;
+  regime_filter:  string | null;
+  objects:        CesiumSatObject[];
+  cesium_note:    string;
+  refresh_ms:     number;
+}
+
+export const fetchCesiumStates = (limit = 10000): Promise<CesiumStatesResponse> =>
+  apiFetch<CesiumStatesResponse>(`/digital-twin/cesium/states?limit=${limit}`);
+
+
+// ─── Satellite Detail State (OrbitalGlobe selection panel) ───────────────────
+// Endpoint: GET /api/v1/digital-twin/state/{norad_id}
+// Source:   digital_twin.py → get_satellite_state() → SatelliteState.to_dict()
+// Verified fields from test_digital_twin.py test_state_to_dict_has_required_fields
+
+export interface SatelliteDetailState {
+  norad_id:         number;
+  name:             string;
+  epoch:            string;
+  altitude_km:      number;
+  latitude_deg:     number;
+  longitude_deg:    number;
+  speed_kms:        number;
+  orbital_regime:   string;
+  position_eci_km:  [number, number, number];
+  velocity_eci_kms: [number, number, number];
+  inclination_deg:  number;
+  perigee_km:       number;
+  apogee_km:        number;
+  period_min:       number;
+  propagation_ok:   boolean;
+  object_type?:     string;
+  error_code?:      number;
+}
+
+export const fetchSatelliteDetail = (noradId: number): Promise<SatelliteDetailState> =>
+  apiFetch<SatelliteDetailState>(`/digital-twin/state/${noradId}`);

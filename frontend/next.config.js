@@ -1,5 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // In production (with internet access), Next.js downloads and self-hosts Google Fonts.
+  // In CI/sandbox environments without google font access, set optimizeFonts: false.
+  // On your local machine and production server, remove this line or set to true.
+  optimizeFonts: process.env.NEXT_OPTIMIZE_FONTS !== "false",
+
   // ── Cesium / webpack ──────────────────────────────────────────────────────
   // Cesium workers are CommonJS bundles that webpack tries to parse as ESM.
   // Marking them as external prevents the parse error (Phase 13A fix).

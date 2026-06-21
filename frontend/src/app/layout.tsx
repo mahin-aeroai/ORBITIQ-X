@@ -5,7 +5,6 @@
  * All pages share this layout via the Next.js App Router.
  */
 import type { Metadata, Viewport } from "next";
-import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { Toaster } from "sonner";
 
 import { QueryProvider } from "@/components/providers/QueryProvider";
@@ -16,25 +15,15 @@ import { SideNav } from "@/components/ui/SideNav";
 import "@/styles/globals.css";
 
 // ─── Typography ───────────────────────────────────────────────────────────────
-const spaceGrotesk = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-display",
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-body",
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ["latin"],
-  variable: "--font-mono",
-  weight: ["400", "500"],
-  display: "swap",
-});
+// Fonts are loaded via <link> in globals.css (Google Fonts CDN) so that
+// next build works in offline / sandboxed CI environments.
+// The CSS variables (--font-display, --font-body, --font-mono) are declared
+// in globals.css and mapped in tailwind.config.ts.
+const fontVars = {
+  display: "--font-display",   // Space Grotesk
+  body:    "--font-body",      // Inter
+  mono:    "--font-mono",      // JetBrains Mono
+};
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
@@ -89,7 +78,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${spaceGrotesk.variable} ${inter.variable} ${jetbrainsMono.variable}`}
+      className="font-body"
     >
       <body className="bg-space-deep text-space-text antialiased">
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
