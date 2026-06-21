@@ -237,3 +237,111 @@ export interface SatelliteDetailState {
 
 export const fetchSatelliteDetail = (noradId: number): Promise<SatelliteDetailState> =>
   apiFetch<SatelliteDetailState>(`/digital-twin/state/${noradId}`);
+
+
+// ─── Knowledge Graph API types (verified against graph_analytics_service.py) ──
+// All field names match exact Cypher RETURN aliases.
+
+// GET /api/v1/knowledge-graph/analytics/summary
+export interface GraphSummary {
+  available:   boolean;
+  node_counts: Record<string, number>;
+  rel_counts:  Record<string, number>;
+  total_nodes: number;
+  total_rels:  number;
+  checked_at:  string;
+}
+export const fetchGraphSummary = (): Promise<GraphSummary> =>
+  apiFetch<GraphSummary>("/knowledge-graph/analytics/summary");
+
+// GET /api/v1/knowledge-graph/analytics/operators?limit=N
+export interface GraphOperator {
+  operator:       string;
+  satelliteCount: number;
+  regimes:        string[];
+  countryCode:    string | null;
+}
+export const fetchGraphOperators = (limit = 30): Promise<{ count: number; operators: GraphOperator[] }> =>
+  apiFetch(`/knowledge-graph/analytics/operators?limit=${limit}`);
+
+// GET /api/v1/knowledge-graph/analytics/risk-operators?limit=N
+export interface RiskOperator {
+  operator:   string;
+  unresolved: number;
+  maxPc:      number;
+  redEvents:  number;
+}
+export const fetchRiskOperators = (limit = 15): Promise<{ count: number; operators: RiskOperator[] }> =>
+  apiFetch(`/knowledge-graph/analytics/risk-operators?limit=${limit}`);
+
+// GET /api/v1/knowledge-graph/analytics/countries?limit=N
+export interface GraphCountry {
+  countryCode:      string;
+  countryName:      string;
+  activeSatellites: number;
+  regimes:          string[];
+}
+export const fetchGraphCountries = (limit = 20): Promise<{ count: number; countries: GraphCountry[] }> =>
+  apiFetch(`/knowledge-graph/analytics/countries?limit=${limit}`);
+
+// GET /api/v1/knowledge-graph/analytics/conjunctions?min_pc=N&limit=N
+// Returns graph-JSON directly consumable by vis-network
+export interface GraphNetworkNode {
+  id:        string;   // NORAD id as string
+  label:     string;
+  type:      string;   // "Satellite"
+  riskLevel: string;   // "red" | "yellow" | "green"
+}
+export interface GraphNetworkEdge {
+  source:        string;
+  target:        string;
+  conjunctionId: string;
+  Pc:            number;
+  missKm:        number;
+  riskLevel:     string;
+  resolved:      boolean;
+}
+export interface ConjunctionNetwork {
+  nodes: GraphNetworkNode[];
+  edges: GraphNetworkEdge[];
+  meta:  { minPc: number; nodeCount: number; edgeCount: number; format: string };
+}
+export const fetchConjunctionNetwork = (minPc = 1e-5, limit = 300): Promise<ConjunctionNetwork> =>
+  apiFetch<ConjunctionNetwork>(`/knowledge-graph/analytics/conjunctions?min_pc=${minPc}&limit=${limit}`);
+
+// GET /api/v1/knowledge-graph/analytics/regimes
+export interface RegimeDensity {
+  regimeId:    string;
+  regime:      string;
+  altMinKm:    number | null;
+  altMaxKm:    number | null;
+  totalObjects:number;
+  satellites:  number;
+  debris:      number;
+  rocketBodies:number;
+}
+export const fetchRegimeDensity = (): Promise<{ regimes: RegimeDensity[] }> =>
+  apiFetch("/knowledge-graph/analytics/regimes");
+
+// GET /api/v1/knowledge-graph/analytics/constellations?limit=N
+export interface GraphConstellation {
+  constellation: string;
+  memberCount:   number;
+  primaryRegime: string | null;
+  operator:      string | null;
+}
+export const fetchConstellations = (limit = 15): Promise<{ count: number; constellations: GraphConstellation[] }> =>
+  apiFetch(`/knowledge-graph/analytics/constellations?limit=${limit}`);
+
+// GET /api/v1/knowledge-graph/search?q=&limit=N
+export interface GraphSearchResult {
+  query:   string;
+  count:   number;
+  results: Record<string, unknown>[];
+}
+export const fetchGraphSearch = (q: string, limit = 20): Promise<GraphSearchResult> =>
+  apiFetch(`/knowledge-graph/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+
+// GET /api/v1/knowledge-graph/satellite/{norad_id}
+export const fetchSatelliteSubgraph = (noradId: number): Promise<Record<string, unknown>> =>
+  apiFetch(`/knowledge-graph/satellite/${noradId}`);
