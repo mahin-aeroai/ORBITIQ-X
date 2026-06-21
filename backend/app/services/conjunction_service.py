@@ -212,28 +212,66 @@ class ConjunctionPersistenceService:
             async with transactional(self.session):
                 await self.event_repo.bulk_log(event_records)
 
-        # ── Publish Redis alerts for red events ───────────────
-        if red_events and self.redis:
-            for r in red_events:
+        # ── Publish Redis alerts for RED + YELLOW events ────────
+        # RED  (Pc ≥ 1e-3): mandatory operator action
+        # YELLOW (Pc ≥ 1e-4): elevated monitoring required
+        # GREEN: informational only — not published to alert channel
+        alert_events = [r for r in to_persist if r["risk_level"] in ("red", "yellow")]
+
+        if alert_events and self.redis:
+            from datetime import timezone as _tz
+            _now = datetime.now(timezone.utc)
+
+            for r in alert_events:
+                # Compute hours remaining to TCA for dashboard urgency display
+                tca = r["tca"]
+                if isinstance(tca, str):
+                    try:
+                        from datetime import datetime as _dt
+                        tca_dt = _dt.fromisoformat(tca.replace("Z", "+00:00"))
+                        hours_remaining = round(
+                            max(0.0, (tca_dt - _now).total_seconds() / 3600), 2
+                        )
+                    except Exception:
+                        hours_remaining = None
+                elif hasattr(tca, "tzinfo"):
+                    hours_remaining = round(
+                        max(0.0, (tca - _now).total_seconds() / 3600), 2
+                    )
+                else:
+                    hours_remaining = None
+
                 alert_payload = json.dumps({
-                    "type": "RED_CONJUNCTION",
-                    "conjunction_id": r["conjunction_id"],
-                    "primary_norad":  r["primary_norad"],
-                    "secondary_norad":r["secondary_norad"],
-                    "Pc":             r["collision_probability"],
-                    "miss_km":        r["miss_distance_km"],
-                    "tca":            str(r["tca"]),
+                    # Schema matches ConjunctionItem in frontend lib/api.ts
+                    "event_id":          r["conjunction_id"],
+                    "conjunction_id":    r["conjunction_id"],
+                    "risk_level":        r["risk_level"],
+                    "probability_of_collision": r["collision_probability"],
+                    "Pc":                r["collision_probability"],
+                    "primary_norad":     r["primary_norad"],
+                    "primary_name":      r.get("primary_name"),
+                    "secondary_norad":   r["secondary_norad"],
+                    "secondary_name":    r.get("secondary_name"),
+                    "miss_distance_km":  r["miss_distance_km"],
+                    "tca":               str(r["tca"]),
+                    "hours_remaining":   hours_remaining,
+                    "maneuver_required": r["maneuver_required"],
                 })
                 try:
                     await self.redis.publish(self.ALERT_CHANNEL, alert_payload)
                     result.alerts_fired += 1
-                    logger.warning(
-                        "RED_CONJUNCTION_ALERT conj_id=%s Pc=%.2e miss=%.3f km",
-                        r["conjunction_id"], r["collision_probability"],
+                    log_fn = logger.warning if r["risk_level"] == "red" else logger.info
+                    log_fn(
+                        "%s_CONJUNCTION_ALERT conj_id=%s Pc=%.2e miss=%.3f km hours=%.1f",
+                        r["risk_level"].upper(),
+                        r["conjunction_id"],
+                        r["collision_probability"],
                         r["miss_distance_km"],
+                        hours_remaining or 0.0,
                     )
                 except Exception as exc:
-                    logger.error("redis_alert_failed error=%s", exc)
+                    logger.error("redis_alert_failed conj_id=%s error=%s",
+                                 r["conjunction_id"], exc)
 
         logger.info(
             "screening_persist_complete total=%d persisted=%d "
