@@ -744,7 +744,7 @@ class TestKnowledgeGraphAPI:
 class TestSchedulerJobIntegration:
     """Verify graph population job is registered alongside other jobs."""
 
-    def test_scheduler_has_4_jobs(self):
+    def test_scheduler_has_5_jobs(self):
         from app.services.catalog_scheduler import build_scheduler
         s   = build_scheduler()
         ids = {j.id for j in s.get_jobs()}
@@ -752,7 +752,7 @@ class TestSchedulerJobIntegration:
         assert "incremental_tle_refresh" in ids
         assert "conjunction_screening"   in ids
         assert "graph_population"        in ids
-        assert len(ids) == 4
+        assert len(ids) == 5
 
     def test_graph_population_job_interval_6h(self):
         from app.services.catalog_scheduler import build_scheduler
