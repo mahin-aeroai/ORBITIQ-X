@@ -30,12 +30,18 @@ import type { CesiumComponentRef } from "resium";
 import {
   Cartesian3,
   Color,
+  Material,
   PointPrimitiveCollection,
+  PolylineCollection,
   ScreenSpaceEventType,
   HeightReference,
+  ClockStep,
+  ClockRange,
+  JulianDate,
   type Viewer as CesiumViewer,
   type PointPrimitive,
   type Cartesian2,
+  type Polyline as CesiumPolyline,
 } from "cesium";
 
 import type { OrbitalGlobeProps } from "./OrbitalGlobe";
@@ -43,9 +49,12 @@ import {
   fetchCesiumStates,
   fetchHighRiskConjunctions,
   fetchSatelliteDetail,
+  fetchOrbitForecast,
   type CesiumSatObject,
   type SatelliteDetailState,
   type ConjunctionItem,
+  type OrbitForecast,
+  type TrajectoryPoint,
 } from "@/lib/api";
 
 // ─── Design-token colour palette ──────────────────────────────────────────────
@@ -109,6 +118,24 @@ interface FilterState {
   showPayload: boolean;
 }
 
+// ─── Ground track / playback state types ─────────────────────────────────────
+
+type PlaybackSpeed = 1 | 10 | 100 | 1000;
+type TimeOffset = "now" | "+1h" | "+1d" | "+7d" | "+14d";
+
+interface TrackedSatellite {
+  noradId:   number;
+  name:      string;
+  forecast:  OrbitForecast | null;
+  loading:   boolean;
+  error:     boolean;
+}
+
+// Track colours for the three polyline segments
+const TRACK_PAST_COLOR   = new Color(0.40, 0.42, 0.95, 0.55);  // dim indigo
+const TRACK_FUTURE_COLOR = new Color(0.99, 0.75, 0.14, 0.75);  // amber
+const TRACK_REENTRY_COLOR= new Color(0.94, 0.27, 0.27, 0.90);  // red
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function toCartesian3(lon: number, lat: number, altKm: number): Cartesian3 {
@@ -156,6 +183,17 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
   // Keep a ref to satellites for use in event callbacks (avoids stale closure)
   const satellitesRef = useRef<CesiumSatObject[]>([]);
   useEffect(() => { satellitesRef.current = satellites; }, [satellites]);
+
+  // ── Ground track / playback state ─────────────────────────────────────────
+  const trackCollRef    = useRef<PolylineCollection | null>(null);
+  const [trackedSats,   setTrackedSats]   = useState<Map<number, TrackedSatellite>>(new Map());
+  const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1);
+  const [isPlaying,     setIsPlaying]     = useState(false);
+  const [simTimeOffset, setSimTimeOffset] = useState<TimeOffset>("now");
+  const [showTrackPanel,setShowTrackPanel]= useState(false);
+  // Ref to avoid stale closures in clock tick handler
+  const trackedSatsRef = useRef<Map<number, TrackedSatellite>>(new Map());
+  useEffect(() => { trackedSatsRef.current = trackedSats; }, [trackedSats]);
 
   // ── Build PointPrimitiveCollection ────────────────────────────────────────
 
@@ -325,6 +363,189 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
     }
   }, [buildCollection]);
 
+  // ── Ground Track Manager ──────────────────────────────────────────────────
+  // Builds past / future polylines from a forecast trajectory.
+  // All Cesium work is imperative — no React reconciliation needed.
+
+  const buildTrackPolylines = useCallback(
+    (viewer: CesiumViewer, forecast: OrbitForecast) => {
+      if (viewer.isDestroyed()) return;
+
+      // Ensure track collection exists
+      if (!trackCollRef.current) {
+        const coll = new PolylineCollection();
+        viewer.scene.primitives.add(coll);
+        trackCollRef.current = coll;
+      }
+
+      const traj = forecast.trajectory;
+      if (!traj || traj.length < 2) return;
+
+      const nowMs = Date.now();
+
+      // Split into past / future segments
+      const past:   Cartesian3[] = [];
+      const future: Cartesian3[] = [];
+
+      for (const pt of traj) {
+        const ptMs = new Date(pt.epoch).getTime();
+        const c = Cartesian3.fromDegrees(pt.longitude_deg, pt.latitude_deg, pt.altitude_km * 1000);
+        if (ptMs <= nowMs) {
+          past.push(c);
+        } else {
+          future.push(c);
+        }
+      }
+
+      // Bridge: connect last past point to first future point
+      if (past.length > 0 && future.length > 0) {
+        future.unshift(past[past.length - 1]);
+      }
+
+      const coll = trackCollRef.current;
+
+      if (past.length >= 2) {
+        coll.add({
+          positions: past,
+          width:     1.5,
+          material:  Material.fromType("Color", {
+            color: TRACK_PAST_COLOR,
+          }),
+          id: `track-past-${forecast.norad_id}`,
+        });
+      }
+
+      if (future.length >= 2) {
+        // Check reentry risk for last segment
+        const lastAlt = traj[traj.length - 1]?.altitude_km ?? 999;
+        const isReentryRisk = forecast.reentry_predicted || lastAlt < 150;
+        coll.add({
+          positions: future,
+          width:     2.0,
+          material:  Material.fromType("Color", {
+            color: isReentryRisk ? TRACK_REENTRY_COLOR : TRACK_FUTURE_COLOR,
+          }),
+          id: `track-future-${forecast.norad_id}`,
+        });
+      }
+
+      viewer.scene.requestRender();
+    },
+    [],
+  );
+
+  const clearAllTracks = useCallback(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    if (trackCollRef.current) {
+      viewer.scene.primitives.remove(trackCollRef.current);
+      trackCollRef.current.destroy();
+      trackCollRef.current = null;
+    }
+    viewer.scene.requestRender();
+  }, []);
+
+  // Track a satellite: fetch forecast and draw ground track
+  const trackSatellite = useCallback(async (noradId: number, name: string) => {
+    // Mark as loading
+    setTrackedSats((prev) => {
+      const next = new Map(prev);
+      next.set(noradId, { noradId, name, forecast: null, loading: true, error: false });
+      return next;
+    });
+
+    try {
+      const forecast = await fetchOrbitForecast(noradId, 1.0, 5);
+
+      setTrackedSats((prev) => {
+        const next = new Map(prev);
+        next.set(noradId, { noradId, name, forecast, loading: false, error: false });
+        return next;
+      });
+
+      const viewer = viewerRef.current?.cesiumElement;
+      if (viewer && !viewer.isDestroyed()) {
+        buildTrackPolylines(viewer, forecast);
+        setShowTrackPanel(true);
+      }
+    } catch {
+      setTrackedSats((prev) => {
+        const next = new Map(prev);
+        next.set(noradId, { noradId, name, forecast: null, loading: false, error: true });
+        return next;
+      });
+    }
+  }, [buildTrackPolylines]);
+
+  const untrackSatellite = useCallback((noradId: number) => {
+    setTrackedSats((prev) => {
+      const next = new Map(prev);
+      next.delete(noradId);
+      if (next.size === 0) {
+        clearAllTracks();
+        setShowTrackPanel(false);
+      }
+      return next;
+    });
+  }, [clearAllTracks]);
+
+  // ── Playback controls ─────────────────────────────────────────────────────
+
+  const setPlayback = useCallback((playing: boolean) => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+
+    if (playing) {
+      // Switch to TICK_DEPENDENT so requestRenderMode works with clock
+      viewer.scene.requestRenderMode = false;
+      viewer.clock.clockStep    = ClockStep.SYSTEM_CLOCK_MULTIPLIER;
+      viewer.clock.shouldAnimate = true;
+    } else {
+      viewer.clock.shouldAnimate = false;
+      viewer.scene.requestRenderMode = true;
+      viewer.scene.requestRender();
+    }
+    setIsPlaying(playing);
+  }, []);
+
+  const setSpeed = useCallback((speed: PlaybackSpeed) => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (viewer && !viewer.isDestroyed()) {
+      viewer.clock.multiplier = speed;
+    }
+    setPlaybackSpeed(speed);
+  }, []);
+
+  const resetPlayback = useCallback(() => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    viewer.clock.shouldAnimate = false;
+    viewer.clock.currentTime   = JulianDate.fromDate(new Date());
+    viewer.clock.multiplier    = 1;
+    viewer.scene.requestRenderMode = true;
+    viewer.scene.requestRender();
+    setIsPlaying(false);
+    setPlaybackSpeed(1);
+    setSimTimeOffset("now");
+  }, []);
+
+  const jumpToOffset = useCallback((offset: TimeOffset) => {
+    const viewer = viewerRef.current?.cesiumElement;
+    if (!viewer || viewer.isDestroyed()) return;
+    const now = new Date();
+    const offsets: Record<TimeOffset, number> = {
+      "now":  0,
+      "+1h":  3_600_000,
+      "+1d":  86_400_000,
+      "+7d":  7 * 86_400_000,
+      "+14d": 14 * 86_400_000,
+    };
+    const target = new Date(now.getTime() + offsets[offset]);
+    viewer.clock.currentTime = JulianDate.fromDate(target);
+    viewer.scene.requestRender();
+    setSimTimeOffset(offset);
+  }, []);
+
   // ── Hover handler ─────────────────────────────────────────────────────────
 
   const handleMouseMove = useCallback(
@@ -369,6 +590,10 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
       try {
         const detail = await fetchSatelliteDetail(picked.id);
         setSelectedSat(detail);
+        // Auto-track the selected satellite (draws ground track)
+        if (detail) {
+          void trackSatellite(detail.norad_id, detail.name || `NORAD-${detail.norad_id}`);
+        }
       } catch {
         setSelectedSat(null);
       } finally {
@@ -377,7 +602,7 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
     } else {
       setSelectedSat(null);
     }
-  }, []);
+  }, [trackSatellite]);
 
   // ── Cleanup on unmount ────────────────────────────────────────────────────
 
@@ -388,6 +613,10 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
         if (collRef.current) {
           viewer.scene.primitives.remove(collRef.current);
           collRef.current.destroy();
+        }
+        if (trackCollRef.current) {
+          viewer.scene.primitives.remove(trackCollRef.current);
+          trackCollRef.current.destroy();
         }
       }
     };
@@ -694,6 +923,138 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Ground Track + Playback Panel ─────────────────────────────── */}
+      {showTrackPanel && trackedSats.size > 0 && (
+        <div className="absolute left-3 bottom-32 z-20 w-56 rounded border border-space-border bg-space-elevated shadow-panel">
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-space-border px-3 py-2">
+            <span className="section-label">GROUND TRACKS</span>
+            <button
+              className="font-mono text-[11px] text-space-muted hover:text-space-text"
+              onClick={() => { clearAllTracks(); setTrackedSats(new Map()); setShowTrackPanel(false); resetPlayback(); }}
+            >
+              CLEAR ALL
+            </button>
+          </div>
+
+          {/* Tracked satellites */}
+          <div className="max-h-32 overflow-y-auto">
+            {Array.from(trackedSats.values()).map((ts) => (
+              <div key={ts.noradId} className="flex items-center justify-between border-b border-space-border px-3 py-1.5">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-mono text-[10px] text-space-text">{ts.name}</div>
+                  <div className="font-mono text-[8px] text-space-muted">
+                    {ts.loading ? "Fetching forecast…" :
+                     ts.error   ? "⚠ Forecast unavailable" :
+                     ts.forecast?.reentry_predicted ? (
+                       <span style={{ color: "var(--color-accent-red)" }}>
+                         ⚠ REENTRY {ts.forecast.reentry_epoch ? new Date(ts.forecast.reentry_epoch).toISOString().slice(0, 10) : "predicted"}
+                       </span>
+                     ) : ts.forecast ? `${ts.forecast.trajectory.length} pts · ${ts.forecast.horizon_days}d` : "—"
+                    }
+                  </div>
+                  {ts.forecast?.decay_rate_km_day != null && ts.forecast.decay_rate_km_day > 0.01 && (
+                    <div className="font-mono text-[8px]" style={{ color: "var(--color-accent-amber)" }}>
+                      Decay {ts.forecast.decay_rate_km_day.toFixed(3)} km/day
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => untrackSatellite(ts.noradId)}
+                  className="ml-2 font-mono text-[10px] text-space-muted hover:text-space-text"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {/* Legend */}
+          <div className="border-b border-space-border px-3 py-1.5">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-0.5 w-4" style={{ backgroundColor: "#667eea" }} />
+                <span className="font-mono text-[8px] text-space-muted">PAST</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-0.5 w-4" style={{ backgroundColor: "#f59e0b" }} />
+                <span className="font-mono text-[8px] text-space-muted">FUTURE</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block h-0.5 w-4" style={{ backgroundColor: "#ef4444" }} />
+                <span className="font-mono text-[8px] text-space-muted">REENTRY</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Playback controls */}
+          <div className="p-2">
+            <div className="section-label mb-1.5">SIMULATION CLOCK</div>
+
+            {/* Time jump */}
+            <div className="mb-2 flex flex-wrap gap-1">
+              {(["now", "+1h", "+1d", "+7d", "+14d"] as TimeOffset[]).map((off) => (
+                <button
+                  key={off}
+                  onClick={() => jumpToOffset(off)}
+                  className={[
+                    "rounded border px-1.5 py-0.5 font-mono text-[8px] transition-colors",
+                    simTimeOffset === off
+                      ? "border-[var(--color-accent-indigo)] text-space-accent bg-[var(--color-accent-indigo-glow)]"
+                      : "border-space-border text-space-muted hover:text-space-text",
+                  ].join(" ")}
+                >
+                  {off}
+                </button>
+              ))}
+            </div>
+
+            {/* Play / Pause / Reset */}
+            <div className="mb-2 flex items-center gap-1.5">
+              <button
+                onClick={() => setPlayback(!isPlaying)}
+                className="flex h-7 w-7 items-center justify-center rounded border border-space-border bg-space-navy font-mono text-[11px] hover:border-[var(--color-accent-indigo)] hover:text-space-text"
+                style={{ color: isPlaying ? "var(--color-accent-indigo-bright)" : "var(--color-text-secondary)" }}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? "⏸" : "▶"}
+              </button>
+              <button
+                onClick={resetPlayback}
+                className="flex h-7 w-7 items-center justify-center rounded border border-space-border bg-space-navy font-mono text-[11px] text-space-muted hover:border-[var(--color-accent-indigo)] hover:text-space-text"
+                title="Reset to now"
+              >
+                ⟲
+              </button>
+
+              {/* Speed selector */}
+              <div className="flex gap-0.5">
+                {([1, 10, 100, 1000] as PlaybackSpeed[]).map((spd) => (
+                  <button
+                    key={spd}
+                    onClick={() => setSpeed(spd)}
+                    className={[
+                      "rounded border px-1 py-0.5 font-mono text-[8px] transition-colors",
+                      playbackSpeed === spd
+                        ? "border-[var(--color-accent-amber)] text-[var(--color-accent-amber-bright)] bg-[var(--color-accent-amber-glow)]"
+                        : "border-space-border text-space-muted hover:text-space-text",
+                    ].join(" ")}
+                  >
+                    {spd}×
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {isPlaying && (
+              <div className="font-mono text-[8px] text-space-muted">
+                ● SIMULATING @ {playbackSpeed}× realtime
+              </div>
+            )}
+          </div>
         </div>
       )}
 

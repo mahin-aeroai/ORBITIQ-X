@@ -345,3 +345,57 @@ export const fetchGraphSearch = (q: string, limit = 20): Promise<GraphSearchResu
 // GET /api/v1/knowledge-graph/satellite/{norad_id}
 export const fetchSatelliteSubgraph = (noradId: number): Promise<Record<string, unknown>> =>
   apiFetch(`/knowledge-graph/satellite/${noradId}`);
+
+
+// ─── Orbit Forecast / Trajectory (verified vs OrbitForecastService + tests) ───
+// Endpoint: GET /api/v1/digital-twin/forecast/{norad_id}?days=N&step_min=N
+// Fields verified from: twin_services.py TrajectoryPoint constructor + test assertions
+
+export interface TrajectoryPoint {
+  epoch:           string;   // ISO 8601 UTC — "epoch" attribute on OrbitForecast
+  position_eci_km: [number, number, number];
+  altitude_km:     number;
+  latitude_deg:    number;
+  longitude_deg:   number;
+}
+
+export interface OrbitForecast {
+  norad_id:          number;
+  name:              string;
+  generated_at:      string;   // ISO 8601
+  horizon_days:      number;
+  step_minutes:      number;
+  trajectory:        TrajectoryPoint[];   // may be empty if TLE unavailable
+  reentry_predicted: boolean;
+  reentry_epoch:     string | null;       // ISO 8601 | null
+  lifetime_days:     number | null;
+  decay_rate_km_day: number | null;
+}
+
+export const fetchOrbitForecast = (
+  noradId:  number,
+  days      = 1.0,
+  stepMin   = 5,
+): Promise<OrbitForecast> =>
+  apiFetch<OrbitForecast>(
+    `/digital-twin/forecast/${noradId}?days=${days}&step_min=${stepMin}`,
+  );
+
+// Endpoint: GET /api/v1/digital-twin/conjunctions/future?min_pc=N&limit=N
+export interface FutureConjunction {
+  conjunctionId:   string;
+  primaryNorad:    number;
+  secondaryNorad:  number;
+  forecastEpoch:   string;    // ISO 8601
+  missDistanceKm:  number;
+  estimatedPc:     number;
+  riskLevel:       string;
+  confidence:      number;
+  generatedAt:     string;
+}
+
+export const fetchFutureConjunctions = (
+  minPc = 1e-6,
+  limit = 50,
+): Promise<{ count: number; events: FutureConjunction[] }> =>
+  apiFetch(`/digital-twin/conjunctions/future?min_pc=${minPc}&limit=${limit}`);
