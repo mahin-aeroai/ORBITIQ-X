@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip"]
+nixPkgs = ["python311", "python311Packages.pip", "stdenv.cc.cc.lib", "gcc"]
 
 [phases.install]
 cmds = ["cd backend && pip install --break-system-packages -r requirements/base.txt"]
