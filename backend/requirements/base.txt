@@ -66,3 +66,5 @@ python-dotenv
 tenacity
 cachetools
 pytz
+email-validator
+pydantic[email]
