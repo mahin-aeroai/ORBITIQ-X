@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     BACKEND_JWT_ALGORITHM: str = "HS256"
     BACKEND_JWT_EXPIRE_MINUTES: int = Field(default=60, ge=5)
     BACKEND_JWT_REFRESH_EXPIRE_DAYS: int = Field(default=7, ge=1)
-    TRUSTED_HOSTS: list[str] = ["localhost", "127.0.0.1"]
+    TRUSTED_HOSTS: list[str] = ["localhost", "127.0.0.1", "orbitiq-x-production.up.railway.app", "*.up.railway.app", "orbitiq-x.vercel.app"]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
