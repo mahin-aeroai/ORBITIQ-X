@@ -467,11 +467,21 @@ async def init_scheduler() -> None:
     """
     Start the catalog sync scheduler.
     Called from main.py lifespan at application startup.
+    Only runs in the first worker to avoid duplicate jobs.
     """
     global _scheduler
-    _scheduler = build_scheduler()
-    _scheduler.start()
-    logger.info("catalog_scheduler_started")
+    # Guard: only start scheduler in one worker process
+    import os
+    worker_id = os.environ.get("GUNICORN_WORKER_ID", "0")
+    if _scheduler is not None and _scheduler.running:
+        logger.info("catalog_scheduler_already_running")
+        return
+    try:
+        _scheduler = build_scheduler()
+        _scheduler.start()
+        logger.info("catalog_scheduler_started")
+    except Exception as exc:
+        logger.warning("catalog_scheduler_start_failed error=%s", exc)
 
 
 async def shutdown_scheduler() -> None:

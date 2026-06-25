@@ -87,7 +87,10 @@ def init_tracing(app=None) -> None:
                     settings.OTEL_EXPORTER_OTLP_ENDPOINT,
                 )
             except Exception as exc:
-                logger.warning("otel_otlp_exporter_failed error=%s — tracing disabled", exc)
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "otel_otlp_exporter_failed: %s — tracing disabled", exc
+                )
                 return
 
         trace.set_tracer_provider(provider)
