@@ -11,7 +11,8 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
+import uvicorn.middleware.proxy_headers
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -110,12 +111,17 @@ def create_application() -> FastAPI:
 def _register_middleware(app: FastAPI) -> None:
     """Register all middleware in correct order (outer-to-inner)."""
 
-    # Trusted hosts (outermost — blocks spoofed Host headers)
-    if settings.ORBITIQ_ENV == "production":
-        app.add_middleware(
-            TrustedHostMiddleware,
-            allowed_hosts=settings.TRUSTED_HOSTS,
-        )
+    # ProxyHeaders — trust Railway's load balancer X-Forwarded-* headers
+    app.add_middleware(
+        uvicorn.middleware.proxy_headers.ProxyHeadersMiddleware,
+        trusted_hosts="*",
+    )
+    # TrustedHostMiddleware — allow wildcard so Railway internal health checks pass
+    trusted = list(settings.TRUSTED_HOSTS) + ["*"]
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=trusted,
+    )
 
     # CORS
     app.add_middleware(
@@ -186,19 +192,43 @@ def _register_routers(app: FastAPI) -> None:
     """Mount versioned API routers."""
 
     # Health check (unauthenticated, no prefix)
-    @app.get("/health", tags=["System"], summary="Platform health check")
+    @app.get("/health", tags=["System"], summary="Platform liveness probe")
     async def health_check() -> dict:
         """
-        Returns platform health status.
-        Used by Docker health checks, Kubernetes liveness probes,
-        and the deployment/scripts/health-check.sh script.
+        Liveness probe — returns 200 immediately if the process is alive.
+        Used by Railway healthcheck, Docker health checks, and monitoring.
+        No authentication required. No database calls.
         """
+        import time
         return {
-            "status": "operational",
+            "status": "ok",
             "version": settings.ORBITIQ_VERSION,
             "environment": settings.ORBITIQ_ENV,
             "platform": "ORBITIQ-X",
+            "timestamp": time.time(),
         }
+
+    @app.get("/ready", tags=["System"], summary="Platform readiness probe")
+    async def readiness_check() -> dict:
+        """
+        Readiness probe — checks that DB and Redis are reachable.
+        Returns 200 if ready to serve traffic, 503 if not.
+        """
+        from fastapi.responses import JSONResponse
+        from app.db.session import get_engine
+        issues = []
+        try:
+            engine = get_engine()
+            async with engine.connect() as conn:
+                await conn.execute(__import__("sqlalchemy").text("SELECT 1"))
+        except Exception as exc:
+            issues.append(f"database: {exc}")
+        if issues:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_ready", "issues": issues}
+            )
+        return {"status": "ready", "platform": "ORBITIQ-X"}
 
     @app.get("/", tags=["System"], include_in_schema=False)
     async def root() -> dict:

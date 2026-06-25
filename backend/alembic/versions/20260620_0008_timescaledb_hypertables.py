@@ -51,7 +51,7 @@ def _timescaledb_available(conn) -> bool:
 def upgrade() -> None:
     conn = op.get_bind()
     if not _timescaledb_available(conn):
-        log.warning(
+        log.info(
             "TimescaleDB extension not found — skipping hypertable conversion. "
             "Install TimescaleDB and re-run this migration to enable time-series "
             "partitioning. The tables will continue working as plain PostgreSQL tables."

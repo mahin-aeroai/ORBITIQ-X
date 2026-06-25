@@ -68,3 +68,4 @@ cachetools
 pytz
 email-validator
 pydantic[email]
+opentelemetry-exporter-otlp-proto-grpc

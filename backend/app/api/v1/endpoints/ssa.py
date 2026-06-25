@@ -51,7 +51,7 @@ async def list_rso_catalog(
     orbit_class: str | None = Query(
         default=None,
         description="Filter by orbital regime: LEO | MEO | GEO | HEO | SSO | VLEO",
-        regex=r"^(LEO|MEO|GEO|HEO|SSO|VLEO)$",
+        pattern=r"^(LEO|MEO|GEO|HEO|SSO|VLEO)$",
     ),
     country_code: str | None = Query(
         default=None,
