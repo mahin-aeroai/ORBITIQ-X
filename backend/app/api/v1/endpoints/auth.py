@@ -396,8 +396,9 @@ async def register(
     session: AsyncSession = Depends(get_session),
 ) -> ORJSONResponse:
     # ── Bootstrap: allow first-user creation without auth ─────
-    count_result = await session.execute(select(User))
-    first_user   = len(count_result.scalars().all()) == 0
+    from sqlalchemy import func
+    count_result = await session.execute(select(func.count()).select_from(User))
+    first_user   = (count_result.scalar() or 0) == 0
 
     if not first_user:
         # Non-bootstrap: require admin token
