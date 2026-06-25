@@ -56,7 +56,11 @@ const nextConfig = {
   experimental: {
     // Needed for SSE streaming responses from Next.js route handlers
     serverActions: {
-      allowedOrigins: ["localhost:3000"],
+      allowedOrigins: [
+        "localhost:3000",
+        "orbitiq-x.vercel.app",
+        ".vercel.app",
+      ],
     },
   },
 

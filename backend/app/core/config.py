@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     BACKEND_WORKERS: int = Field(default=4, ge=1)
     BACKEND_RELOAD: bool = True
     BACKEND_API_PREFIX: str = "/api/v1"
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "https://orbitiq-x.vercel.app", "https://*.vercel.app"]
     BACKEND_RATE_LIMIT_REQUESTS: int = Field(default=100, ge=1)
     BACKEND_JWT_ALGORITHM: str = "HS256"
     BACKEND_JWT_EXPIRE_MINUTES: int = Field(default=60, ge=5)
@@ -68,6 +68,13 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
+        # Railway injects DATABASE_URL directly — use it if present
+        import os
+        railway_url = os.environ.get("DATABASE_URL", "")
+        if railway_url:
+            url = railway_url.replace("postgres://", "postgresql+asyncpg://", 1)
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            return url
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:"
             f"{self.POSTGRES_PASSWORD.get_secret_value()}"
@@ -84,6 +91,11 @@ class Settings(BaseSettings):
 
     @property
     def REDIS_URL(self) -> str:
+        # Railway injects REDIS_URL directly — use it if present
+        import os
+        railway_url = os.environ.get("REDIS_URL", "")
+        if railway_url:
+            return railway_url
         return (
             f"redis://:{self.REDIS_PASSWORD.get_secret_value()}"
             f"@{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
@@ -93,7 +105,7 @@ class Settings(BaseSettings):
     NEO4J_HOST: str = "localhost"
     NEO4J_BOLT_PORT: int = 7687
     NEO4J_USER: str = "neo4j"
-    NEO4J_PASSWORD: SecretStr = Field(...)
+    NEO4J_PASSWORD: SecretStr = Field(default="not-configured")
     NEO4J_DATABASE: str = "orbitiq"
 
     @property
@@ -103,7 +115,7 @@ class Settings(BaseSettings):
     # ─── Weaviate ─────────────────────────────────────────────────────────────
     WEAVIATE_HOST: str = "localhost"
     WEAVIATE_PORT: int = 8080
-    WEAVIATE_API_KEY: SecretStr = Field(...)
+    WEAVIATE_API_KEY: SecretStr = Field(default="not-configured")
 
     @property
     def WEAVIATE_URL(self) -> str:
@@ -114,13 +126,13 @@ class Settings(BaseSettings):
     INFLUXDB_PORT: int = 8086
     INFLUXDB_ORG: str = "orbitiq-x"
     INFLUXDB_BUCKET: str = "space_weather"
-    INFLUXDB_TOKEN: SecretStr = Field(...)
+    INFLUXDB_TOKEN: SecretStr = Field(default="not-configured")
 
     # ─── MinIO ────────────────────────────────────────────────────────────────
     MINIO_HOST: str = "localhost"
     MINIO_PORT: int = 9000
     MINIO_ROOT_USER: str = "minioadmin"
-    MINIO_ROOT_PASSWORD: SecretStr = Field(...)
+    MINIO_ROOT_PASSWORD: SecretStr = Field(default="not-configured")
     MINIO_BUCKET_TLE: str = "orbitiq-tle"
     MINIO_BUCKET_DOCS: str = "orbitiq-docs"
     MINIO_BUCKET_MODELS: str = "orbitiq-models"
