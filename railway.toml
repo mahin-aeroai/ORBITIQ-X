@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd backend && pip install -r requirements/base.txt"
+buildCommand = "cd backend && pip install --break-system-packages -r requirements/base.txt"
 
 [deploy]
 startCommand = "cd backend && bash entrypoint.sh gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --workers 2 --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 30"
