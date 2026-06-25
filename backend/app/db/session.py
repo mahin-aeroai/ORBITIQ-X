@@ -56,6 +56,7 @@ def _build_engine(database_url: str, pool_size: int, max_overflow: int) -> Async
             "server_settings": {
                 "application_name": "orbitiq-x-backend",
                 "jit": "off",
+                "search_path": "public",
             },
             "command_timeout": 60,
         },
