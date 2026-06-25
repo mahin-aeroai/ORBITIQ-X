@@ -174,11 +174,13 @@ api_v1_router.include_router(
 
 # ─── CDM Document (separate path) ────────────────────────────────────────────
 # CDM endpoint is under /conjunctions/cdm/{id} but also exposed at /cdm/{id}
-# for direct document retrieval by external tools
+# for direct document retrieval by external tools.
+# Auth: operator+ — same as /conjunctions (H-01 fix: add missing dependencies=)
 from app.api.v1.endpoints.conjunctions import router as _conj_router
 api_v1_router.include_router(
     _conj_router,
     prefix="/cdm",
     tags=["CDM Documents"],
-    include_in_schema=False,  # avoid duplicate docs, real route is on /conjunctions
+    dependencies=[_operator],        # FIX H-01: was missing, exposed /cdm unauthenticated
+    include_in_schema=False,         # avoid duplicate docs, real route is on /conjunctions
 )

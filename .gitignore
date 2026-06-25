@@ -84,6 +84,8 @@ datasets/catalogs/*.csv
 *.bin
 *.onnx
 models/
+!backend/app/digital_twin/models/
+!backend/app/**/models/
 checkpoints/
 runs/
 mlruns/
