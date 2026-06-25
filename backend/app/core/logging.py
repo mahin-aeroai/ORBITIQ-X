@@ -51,9 +51,20 @@ def configure_logging(level: str = "INFO") -> None:
         env = "development"
 
     # ── Shared processors ──────────────────────────────────────
+    def _safe_add_logger_name(logger, method_name, event_dict):
+        """Safe version of add_logger_name that handles None logger."""
+        try:
+            if logger is not None and hasattr(logger, "name"):
+                event_dict["logger"] = logger.name
+            else:
+                event_dict["logger"] = "unknown"
+        except Exception:
+            event_dict["logger"] = "unknown"
+        return event_dict
+
     shared_processors = [
         structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_logger_name,
+        _safe_add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
