@@ -38,10 +38,14 @@ HYPERTABLE_SQL = [
 
 
 def _timescaledb_available(conn) -> bool:
-    result = conn.execute(
-        "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'timescaledb')"
-    )
-    return result.scalar()
+    try:
+        from sqlalchemy import text
+        result = conn.execute(
+            text("SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'timescaledb')")
+        )
+        return result.scalar()
+    except Exception:
+        return False
 
 
 def upgrade() -> None:
