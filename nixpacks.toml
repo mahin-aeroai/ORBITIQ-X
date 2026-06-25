@@ -1,12 +1,14 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "gcc", "stdenv.cc.cc.lib", "zlib"]
+nixPkgs = [
+  "python311",
+  "python311Packages.pip",
+  "python311Packages.greenlet"
+]
 
 [phases.install]
 cmds = [
-  "export LD_LIBRARY_PATH=$(find /nix/store -name 'libstdc++.so.6' 2>/dev/null | head -1 | xargs dirname 2>/dev/null):$LD_LIBRARY_PATH",
-  "cd backend && pip install --break-system-packages --no-binary greenlet greenlet",
-  "cd backend && pip install --break-system-packages -r requirements/base.txt"
+  "cd backend && pip install --break-system-packages -r requirements/base.txt --no-binary greenlet"
 ]
 
 [start]
-cmd = "export LD_LIBRARY_PATH=$(find /nix/store -name 'libstdc++.so.6' 2>/dev/null | head -1 | xargs dirname 2>/dev/null):$LD_LIBRARY_PATH && cd backend && python3 entrypoint.sh"
+cmd = "cd backend && python3 entrypoint.sh"
