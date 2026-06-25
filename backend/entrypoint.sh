@@ -1,37 +1,36 @@
 #!/bin/bash
 # ORBITIQ-X — Docker entrypoint (Railway-compatible)
-set -euo pipefail
 
 BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$BACKEND_DIR"
 
 echo "[entrypoint] ORBITIQ-X backend starting..."
 
-# Parse DATABASE_URL in Python (more reliable than bash string manipulation)
-if [ -n "${DATABASE_URL:-}" ]; then
-    eval $(python3 - << 'PYEOF'
-import os, urllib.parse
-url = os.environ.get("DATABASE_URL", "")
-# Handle postgres:// and postgresql+asyncpg:// formats
-url = url.replace("postgresql+asyncpg://", "postgresql://").replace("postgres://", "postgresql://")
-try:
-    p = urllib.parse.urlparse(url)
-    print(f'export POSTGRES_HOST="{p.hostname}"')
-    print(f'export POSTGRES_PORT="{p.port or 5432}"')
-    print(f'export POSTGRES_DB="{p.path.lstrip("/")}"')
-    print(f'export POSTGRES_USER="{p.username}"')
-    print(f'export POSTGRES_PASSWORD="{p.password}"')
-except Exception as e:
-    print(f'echo "[entrypoint] WARNING: Could not parse DATABASE_URL: {e}"')
-PYEOF
-)
-    echo "[entrypoint] DB host: ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}"
-fi
+# Parse DATABASE_URL and run migrations + start server
+exec python3 - "$@" << 'PYEOF'
+import os, sys, subprocess, urllib.parse
 
-# Run migrations (non-fatal)
-echo "[entrypoint] Running migrations..."
-python3 migrate.py upgrade head 2>&1 || echo "[entrypoint] WARNING: Migration failed (non-fatal)"
+args = sys.argv[1:]
+
+# Parse DATABASE_URL to set POSTGRES_* env vars for migrations
+db_url = os.environ.get("DATABASE_URL", "")
+if db_url:
+    url = db_url.replace("postgresql+asyncpg://", "postgresql://").replace("postgres://", "postgresql://")
+    p = urllib.parse.urlparse(url)
+    os.environ["POSTGRES_HOST"]     = p.hostname or "localhost"
+    os.environ["POSTGRES_PORT"]     = str(p.port or 5432)
+    os.environ["POSTGRES_DB"]       = p.path.lstrip("/")
+    os.environ["POSTGRES_USER"]     = p.username or "orbitiq"
+    os.environ["POSTGRES_PASSWORD"] = p.password or ""
+    print(f"[entrypoint] DB: {p.hostname}:{p.port}/{p.path.lstrip('/')}", flush=True)
+
+# Run migrations
+print("[entrypoint] Running migrations...", flush=True)
+r = subprocess.run([sys.executable, "migrate.py", "upgrade", "head"], capture_output=False)
+if r.returncode != 0:
+    print("[entrypoint] WARNING: Migration failed (non-fatal)", flush=True)
 
 # Start gunicorn
-echo "[entrypoint] Starting gunicorn..."
-exec python3 -m gunicorn "$@"
+print(f"[entrypoint] Starting gunicorn...", flush=True)
+os.execvp(sys.executable, [sys.executable, "-m", "gunicorn"] + args)
+PYEOF
