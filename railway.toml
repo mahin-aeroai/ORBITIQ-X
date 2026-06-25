@@ -1,9 +1,8 @@
 [build]
-builder = "nixpacks"
-buildCommand = "cd backend && pip install --break-system-packages -r requirements/base.txt"
+builder = "dockerfile"
+dockerfilePath = "backend/Dockerfile.railway"
 
 [deploy]
-startCommand = "export LD_LIBRARY_PATH=$(find /nix/store -name 'libstdc++.so.6' 2>/dev/null | head -1 | xargs dirname 2>/dev/null):$LD_LIBRARY_PATH && cd backend && python3 entrypoint.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 120
 restartPolicyType = "on_failure"
