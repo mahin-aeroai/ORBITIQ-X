@@ -1,25 +1,25 @@
 FROM python:3.11-slim-bookworm
 
-# Bookworm (Debian 12) has glibc 2.36+ — greenlet wheels work correctly
-WORKDIR /app/backend
+WORKDIR /app
 
-# Install system dependencies
+# System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libpq-dev curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for layer caching
-COPY requirements/base.txt requirements/base.txt
+COPY backend/requirements/base.txt requirements/base.txt
 RUN pip install --no-cache-dir -r requirements/base.txt
 
-# Copy application code
-COPY . .
+# Copy backend application
+COPY backend/ .
 
-# Health check
+# Copy orbital-engine (used by digital twin services)
+COPY orbital-engine/ /app/orbital-engine/
+
+WORKDIR /app
+
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
-
-# Expose port (Railway overrides with $PORT)
-EXPOSE 8000
 
 CMD ["python3", "entrypoint.sh"]
