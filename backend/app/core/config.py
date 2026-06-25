@@ -81,6 +81,9 @@ class Settings(BaseSettings):
         if railway_url:
             url = railway_url.replace("postgres://", "postgresql+asyncpg://", 1)
             url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            # Ensure public schema is used (asyncpg may default to different schema)
+            if "?" not in url:
+                url += "?options=-csearch_path%3Dpublic"
             return url
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:"
