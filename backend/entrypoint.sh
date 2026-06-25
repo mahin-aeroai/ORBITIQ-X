@@ -27,9 +27,12 @@ if db_url:
 
 # ── Run migrations ────────────────────────────────────────────
 print("[entrypoint] Running migrations...", flush=True)
+print(f"[entrypoint] DATABASE_URL = {db_url[:60]}..." if db_url else "[entrypoint] DATABASE_URL not set!", flush=True)
 r = subprocess.run([sys.executable, "migrate.py", "upgrade", "head"])
 if r.returncode != 0:
-    print("[entrypoint] WARNING: Migration failed (non-fatal)", flush=True)
+    print("[entrypoint] ERROR: Migration failed!", flush=True)
+    sys.exit(1)  # Don't start if migrations fail
+print("[entrypoint] Migrations complete.", flush=True)
 
 # ── Start gunicorn ────────────────────────────────────────────
 port = os.environ.get("PORT", "8000")
