@@ -458,7 +458,7 @@ async def register(
         session=session,
     )
 
-    return ORJSONResponse(
+    return JSONResponse(
         content={"message": "User created.", "user": _user_dict(new_user)},
         status_code=201,
     )
