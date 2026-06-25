@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/v1/:path*",
-      "destination": "https://orbitiq-backend.up.railway.app/api/v1/:path*"
+      "destination": "https://orbitiq-x-production.up.railway.app/api/v1/:path*"
     }
   ],
   "headers": [
