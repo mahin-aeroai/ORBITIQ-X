@@ -42,6 +42,7 @@ import asyncio
 import json
 import logging
 import sys
+import os
 import pathlib
 import time
 import uuid
@@ -49,7 +50,16 @@ from datetime import datetime, timezone
 from typing import Any, AsyncIterator
 
 # Add agents package to path
-_AGENTS_ROOT = pathlib.Path(__file__).parents[4] / "agents"
+# Locate agents/ directory — works in both local dev and Docker deployments
+# In Docker: /app/app/services/... so parent[2] = /app = WORKDIR
+# In local dev: backend/app/services/... so parent[3] = repo root
+_this_file = pathlib.Path(__file__).resolve()
+_agents_root_candidates = [
+    _this_file.parents[3] / "agents",  # local: backend/app/services -> repo_root/agents
+    _this_file.parents[2] / "agents",  # docker: /app/app/services -> /app/agents
+    pathlib.Path(os.environ.get("AGENTS_ROOT", "")) if os.environ.get("AGENTS_ROOT") else None,
+]
+_AGENTS_ROOT = next((p for p in _agents_root_candidates if p and p.exists()), _this_file.parents[2] / "agents")
 if str(_AGENTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_AGENTS_ROOT))
 
