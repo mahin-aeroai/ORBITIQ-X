@@ -7,7 +7,7 @@ nixPkgs = [
 
 [phases.install]
 cmds = [
-  "cd backend && pip install --break-system-packages -r requirements/base.txt --no-binary greenlet"
+  "cd backend && pip install --break-system-packages --ignore-installed greenlet -r requirements/base.txt"
 ]
 
 [start]
