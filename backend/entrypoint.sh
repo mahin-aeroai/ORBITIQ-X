@@ -16,9 +16,11 @@ if db_url:
         p = urllib.parse.urlparse(url)
         os.environ["POSTGRES_HOST"]     = str(p.hostname or "localhost")
         os.environ["POSTGRES_PORT"]     = str(p.port or 5432)
-        os.environ["POSTGRES_DB"]       = str(p.path or "/orbitiq_db").lstrip("/")
+        os.environ["POSTGRES_DB"]       = str(p.path or "/railway").lstrip("/")
         os.environ["POSTGRES_USER"]     = str(p.username or "postgres")
         os.environ["POSTGRES_PASSWORD"] = str(p.password or "")
+        # Set ORBITIQ_DATABASE_URL so alembic env.py uses it directly (Option 1)
+        os.environ["ORBITIQ_DATABASE_URL"] = db_url
         print(f"[entrypoint] DB: {p.hostname}:{p.port}{p.path}", flush=True)
     except Exception as e:
         print(f"[entrypoint] WARNING: URL parse error: {e}", flush=True)
