@@ -7,6 +7,11 @@
 export interface OrbitalGlobeProps {
   className?: string;
   style?: React.CSSProperties;
+  // Legacy props from Cesium implementation — accepted but ignored
+  defaultObjectTypes?: string[];
+  showConjunctions?: boolean;
+  showGroundTracks?: boolean;
+  autoRotate?: boolean;
 }
 
 export function OrbitalGlobe({ className, style }: OrbitalGlobeProps) {
