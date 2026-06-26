@@ -16,8 +16,16 @@ class GlobeErrorBoundary extends Component<{children: ReactNode}, {failed: boole
   render() {
     if (this.state.failed) {
       return (
-        <div className="flex h-full items-center justify-center" style={{color:"var(--color-text-secondary)",fontFamily:"var(--font-mono)",fontSize:11}}>
-          3D globe unavailable — WebGL required
+        <div style={{
+          display:"flex",height:"100%",alignItems:"center",justifyContent:"center",
+          background:"radial-gradient(ellipse at center, #0d1b2e 0%, #060d16 100%)",
+          border:"1px solid rgba(99,102,241,0.15)",borderRadius:8,
+          color:"rgba(148,163,184,0.5)",fontFamily:"var(--font-mono)",fontSize:11,
+          flexDirection:"column",gap:8
+        }}>
+          <div style={{fontSize:32,opacity:0.3}}>🌐</div>
+          <div>3D ORBITAL GLOBE UNAVAILABLE</div>
+          <div style={{fontSize:9,opacity:0.6}}>WebGL / Cesium not supported in this browser</div>
         </div>
       );
     }
