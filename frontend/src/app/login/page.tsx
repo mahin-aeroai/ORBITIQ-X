@@ -1,4 +1,22 @@
 "use client";
+import { Component, type ReactNode } from "react";
+
+class ErrorBoundary extends Component<{children: ReactNode}, {error: string | null}> {
+  state = { error: null };
+  static getDerivedStateFromError(e: Error) { return { error: e.message }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{padding:32,color:"#ff4444",fontFamily:"monospace",background:"#0a0f1a",minHeight:"100vh"}}>
+          <h2>CLIENT ERROR</h2>
+          <pre style={{whiteSpace:"pre-wrap",fontSize:12}}>{this.state.error}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 /**
  * ORBITIQ-X — Login Page
  * ========================
@@ -205,12 +223,14 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen items-center justify-center bg-space-midnight">
-        <span className="section-label">LOADING…</span>
-      </div>
-    }>
-      <LoginForm />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center bg-space-midnight">
+          <span className="section-label">LOADING…</span>
+        </div>
+      }>
+        <LoginForm />
+      </Suspense>
+    </ErrorBoundary>
   );
 }
