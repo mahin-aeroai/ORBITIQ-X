@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,7 +164,7 @@ async def login(
     body:    LoginRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> ORJSONResponse:
+) -> JSONResponse:
     from app.core.config import get_settings
     settings = get_settings()
 
@@ -264,7 +264,7 @@ async def login(
 
     logger.info("user_login user_id=%d role=%s", user.id, user.role)
 
-    return ORJSONResponse(content={
+    return JSONResponse(content={
         "access_token":  access_token,
         "refresh_token": refresh_token,
         "token_type":    "bearer",
@@ -289,7 +289,7 @@ async def refresh_tokens(
     body:    RefreshRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> ORJSONResponse:
+) -> JSONResponse:
     from app.core.config import get_settings
     settings = get_settings()
 
@@ -341,7 +341,7 @@ async def refresh_tokens(
 
     logger.info("token_refresh user_id=%d", user.id)
 
-    return ORJSONResponse(content={
+    return JSONResponse(content={
         "access_token":  access_token,
         "refresh_token": refresh_token,
         "token_type":    "bearer",
@@ -362,7 +362,7 @@ async def logout(
     request: Request,
     session: AsyncSession = Depends(get_session),
     user:    AnyAuthUser  = None,  # optional — logout even with expired access token
-) -> ORJSONResponse:
+) -> JSONResponse:
     token_hash = hash_refresh_token(body.refresh_token)
 
     await session.execute(
@@ -377,7 +377,7 @@ async def logout(
             request, user, "logout", "success", session=session,
         )
 
-    return ORJSONResponse(content={"message": "Logged out successfully."})
+    return JSONResponse(content={"message": "Logged out successfully."})
 
 
 # ── POST /auth/register ───────────────────────────────────────
@@ -397,7 +397,7 @@ async def register(
     body:    RegisterRequest,
     request: Request,
     session: AsyncSession = Depends(get_session),
-) -> ORJSONResponse:
+) -> JSONResponse:
     # ── Bootstrap: allow first-user creation without auth ─────
     from sqlalchemy import func
     count_result = await session.execute(select(func.count()).select_from(User))
@@ -474,8 +474,8 @@ async def register(
     summary="Get current user profile",
     description="Returns the profile of the currently authenticated user.",
 )
-async def get_me(user: AnyAuthUser) -> ORJSONResponse:
-    return ORJSONResponse(content=_user_dict(user))
+async def get_me(user: AnyAuthUser) -> JSONResponse:
+    return JSONResponse(content=_user_dict(user))
 
 
 # ── POST /auth/change-password ────────────────────────────────
@@ -490,7 +490,7 @@ async def change_password(
     request: Request,
     user:    AnyAuthUser,
     session: AsyncSession = Depends(get_session),
-) -> ORJSONResponse:
+) -> JSONResponse:
     if not verify_password(body.current_password, user.hashed_password):
         await log_auth_event(
             request, user, "password_change_failed", "failure",
@@ -516,7 +516,7 @@ async def change_password(
         request, user, "password_changed", "success", session=session,
     )
 
-    return ORJSONResponse(content={"message": "Password changed. Please log in again."})
+    return JSONResponse(content={"message": "Password changed. Please log in again."})
 
 
 # ── GET /auth/sessions ────────────────────────────────────────
@@ -530,7 +530,7 @@ async def list_sessions(
     _:       AdminOnly,
     session: AsyncSession = Depends(get_session),
     limit:   int          = 100,
-) -> ORJSONResponse:
+) -> JSONResponse:
     now = datetime.now(timezone.utc)
     q   = (
         select(UserSession)
@@ -540,7 +540,7 @@ async def list_sessions(
     )
     result   = await session.execute(q)
     sessions = result.scalars().all()
-    return ORJSONResponse(content={
+    return JSONResponse(content={
         "count": len(sessions),
         "sessions": [
             {
