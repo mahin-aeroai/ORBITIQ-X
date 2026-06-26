@@ -96,16 +96,16 @@ def run_migrations_online() -> None:
     Run migrations in 'online' mode — apply directly against the DB.
     Uses a single connection from a new engine built from our DSN.
     """
+    # Use execution_options(isolation_level="AUTOCOMMIT") so each DDL
+    # statement commits immediately — no transaction wrapper needed
     connectable = engine_from_config(
         {"sqlalchemy.url": get_sync_url()},
         prefix="sqlalchemy.",
-        poolclass=pool.NullPool,           # never pool in migration scripts
-    )
+        poolclass=pool.NullPool,
+    ).execution_options(isolation_level="AUTOCOMMIT")
 
     with connectable.connect() as connection:
-        # Set search_path and disable autobegin so DDL commits immediately
         connection.execute(text("SET search_path TO public"))
-        connection.execute(text("COMMIT"))  # close any open transaction
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
