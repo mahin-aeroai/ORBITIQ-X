@@ -103,8 +103,9 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Set search_path so all tables resolve to public schema
+        # Set search_path and disable autobegin so DDL commits immediately
         connection.execute(text("SET search_path TO public"))
+        connection.execute(text("COMMIT"))  # close any open transaction
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
@@ -115,8 +116,7 @@ def run_migrations_online() -> None:
             render_item=_render_item,
             render_as_batch=False,
         )
-        with context.begin_transaction():
-            context.run_migrations()
+        context.run_migrations()
 
 
 def _render_item(type_: str, obj: object, autogen_context) -> str | bool:
