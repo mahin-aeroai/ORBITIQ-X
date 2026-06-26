@@ -6,7 +6,15 @@ Parses DATABASE_URL, runs migrations, starts gunicorn.
 import os, sys, subprocess, urllib.parse
 
 # ── Parse DATABASE_URL → POSTGRES_* env vars ─────────────────
-db_url = os.environ.get("DATABASE_URL", "")
+# Try multiple sources for DATABASE_URL
+db_url = (
+    os.environ.get("DATABASE_URL") or
+    os.environ.get("ORBITIQ_DATABASE_URL") or
+    os.environ.get("POSTGRES_URL") or
+    ""
+)
+print(f"[entrypoint] Env DATABASE_URL present: {bool(os.environ.get('DATABASE_URL'))}", flush=True)
+print(f"[entrypoint] All env keys with DB/POSTGRES: {[k for k in os.environ if 'DB' in k or 'POSTGRES' in k or 'DATABASE' in k]}", flush=True)
 if db_url:
     url = db_url
     for old, new in [("postgresql+asyncpg://","postgresql://"),("postgres://","postgresql://")]:
