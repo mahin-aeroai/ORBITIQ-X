@@ -113,11 +113,7 @@ class ConjunctionEvent(Base):
     )
 
     # ── Relationships ─────────────────────────────────────────
-    primary_satellite: Mapped[Optional["Satellite"]] = relationship(  # type: ignore[name-defined]
-        back_populates="conjunction_events_primary",
-        primaryjoin="ConjunctionEvent.primary_norad == foreign(Satellite.norad_id)",
-        foreign_keys=[primary_norad],
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
 
     __table_args__ = (
         Index("ix_conj_tca_pc", "tca", "collision_probability"),

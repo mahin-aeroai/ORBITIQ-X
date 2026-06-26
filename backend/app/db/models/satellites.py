@@ -102,24 +102,13 @@ class Satellite(Base):
     )
 
     # ── Relationships ─────────────────────────────────────────
-    operator_rel: Mapped[Optional["Operator"]] = relationship(  # type: ignore[name-defined]
-        back_populates="satellites",
-        primaryjoin="Satellite.operator_id == Operator.id",
-        foreign_keys=[operator_id],
-    )
-    tle_records: Mapped[list["TLERecord"]] = relationship(  # type: ignore[name-defined]
-        back_populates="satellite", cascade="all, delete-orphan",
-        primaryjoin="Satellite.norad_id == foreign(TLERecord.norad_id)",
-    )
-    conjunction_events_primary: Mapped[list["ConjunctionEvent"]] = relationship(  # type: ignore[name-defined]
-        back_populates="primary_satellite",
-        primaryjoin="Satellite.norad_id == foreign(ConjunctionEvent.primary_norad)",
-        foreign_keys="ConjunctionEvent.primary_norad",
-    )
-    orbital_events: Mapped[list["OrbitalEvent"]] = relationship(  # type: ignore[name-defined]
-        back_populates="satellite",
-        primaryjoin="Satellite.norad_id == foreign(OrbitalEvent.norad_id)",
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
+    # tle_records relationship removed — TLERecord not in scope
+
+    # conjunction_events_primary removed — ConjunctionEvent not in scope
+
+    # orbital_events removed — OrbitalEvent not in scope
+
 
     __table_args__ = (
         UniqueConstraint("norad_id", name="uq_satellites_norad"),

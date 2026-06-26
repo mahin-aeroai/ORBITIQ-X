@@ -74,11 +74,7 @@ class Mission(Base):
         server_default=func.now(), onupdate=func.now()
     )
 
-    operator_rel: Mapped[Optional["Operator"]] = relationship(  # type: ignore[name-defined]
-        back_populates="missions",
-        primaryjoin="Mission.operator_id == Operator.id",
-        foreign_keys=[operator_id],
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
 
     __table_args__ = (
         UniqueConstraint("mission_id", name="uq_missions_mission_id"),

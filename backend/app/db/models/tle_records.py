@@ -75,11 +75,7 @@ class TLERecord(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    satellite: Mapped[Optional["Satellite"]] = relationship(  # type: ignore[name-defined]
-        back_populates="tle_records",
-        primaryjoin="TLERecord.norad_id == foreign(Satellite.norad_id)",
-        foreign_keys=[norad_id],
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
 
     __table_args__ = (
         UniqueConstraint("norad_id", "epoch", "element_set_num",

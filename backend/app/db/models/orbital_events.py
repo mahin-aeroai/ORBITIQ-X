@@ -97,11 +97,7 @@ class OrbitalEvent(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    satellite: Mapped[Optional["Satellite"]] = relationship(  # type: ignore[name-defined]
-        back_populates="orbital_events",
-        primaryjoin="OrbitalEvent.norad_id == foreign(Satellite.norad_id)",
-        foreign_keys=[norad_id],
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
 
     __table_args__ = (
         Index("ix_orbital_events_norad_type_time", "norad_id", "event_type", "event_time"),

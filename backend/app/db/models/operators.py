@@ -39,12 +39,8 @@ class Operator(Base):
         server_default=func.now(), onupdate=func.now()
     )
 
-    satellites: Mapped[list["Satellite"]] = relationship(  # type: ignore[name-defined]
-        back_populates="operator_rel", foreign_keys="Satellite.operator_id"
-    )
-    missions: Mapped[list["Mission"]] = relationship(  # type: ignore[name-defined]
-        back_populates="operator_rel"
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
+    # relationship removed — cross-model string ref not resolvable at mapper config
 
     __table_args__ = (
         Index("ix_operators_country_type", "country_code", "operator_type"),

@@ -81,10 +81,7 @@ class AuditLog(Base):
     task_id: Mapped[Optional[str]] = mapped_column(String(64),
         comment="Agent task UUID")
 
-    user: Mapped[Optional["User"]] = relationship(  # type: ignore[name-defined]
-        primaryjoin="AuditLog.user_id == User.id",
-        foreign_keys=[user_id],
-    )
+    # relationship removed — cross-model string ref not resolvable at mapper config
 
     __table_args__ = (
         # Primary query patterns
