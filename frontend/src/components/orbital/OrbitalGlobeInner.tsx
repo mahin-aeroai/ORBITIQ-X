@@ -158,7 +158,6 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
 
   // ── Refs ──────────────────────────────────────────────────────────────────
   const viewerRef   = useRef<CesiumComponentRef<CesiumViewer>>(null);
-  const [globeError, setGlobeError] = useState<string | null>(null);
   const collRef     = useRef<PointPrimitiveCollection | null>(null);
   // noradId → PointPrimitive for O(1) position updates
   const pointMapRef = useRef<Map<number, PointPrimitive>>(new Map());
@@ -644,23 +643,12 @@ export function OrbitalGlobeInner({ showConjunctions = false }: OrbitalGlobeProp
   // Render
   // ─────────────────────────────────────────────────────────────────────────
 
-  if (globeError) {
-    return (
-      <div style={{display:"flex",height:"100%",alignItems:"center",justifyContent:"center",
-        flexDirection:"column",gap:8,color:"rgba(148,163,184,0.5)",fontFamily:"monospace",fontSize:11}}>
-        <div style={{fontSize:32,opacity:0.3}}>🌐</div>
-        <div>ORBITAL ENGINE ERROR</div>
-        <div style={{fontSize:9,opacity:0.6}}>{globeError}</div>
-      </div>
-    );
-  }
 
   return (
     <div className="relative h-full w-full">
 
       {/* ── Cesium Viewer ──────────────────────────────────────────────────── */}
       <Viewer
-        onError={(e: unknown) => setGlobeError(String(e))}
         ref={viewerRef}
         full
         {...viewerOptions}
