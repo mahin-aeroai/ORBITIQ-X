@@ -28,10 +28,26 @@ if db_url:
 # ── Run migrations ────────────────────────────────────────────
 print("[entrypoint] Running migrations...", flush=True)
 print(f"[entrypoint] DATABASE_URL = {db_url[:60]}..." if db_url else "[entrypoint] DATABASE_URL not set!", flush=True)
-r = subprocess.run([sys.executable, "migrate.py", "upgrade", "head"])
+
+# Build psycopg2 URL for alembic (must be sync driver)
+sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://").replace("postgres://", "postgresql://")
+# Convert to psycopg2
+sync_url_pg2 = sync_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+print(f"[entrypoint] Alembic sync URL: {sync_url_pg2[:60]}...", flush=True)
+
+env = os.environ.copy()
+env["ORBITIQ_DATABASE_URL"] = db_url  # alembic env.py reads this
+env["DATABASE_URL"] = db_url
+
+# Run alembic directly with explicit URL
+r = subprocess.run(
+    [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
+    env=env,
+    cwd=os.path.dirname(os.path.abspath(__file__))
+)
 if r.returncode != 0:
     print("[entrypoint] ERROR: Migration failed!", flush=True)
-    sys.exit(1)  # Don't start if migrations fail
+    sys.exit(1)
 print("[entrypoint] Migrations complete.", flush=True)
 
 # ── Start gunicorn ────────────────────────────────────────────
