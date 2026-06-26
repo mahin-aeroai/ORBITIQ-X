@@ -8,7 +8,7 @@
  * API prefix: /api/v1
  */
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/api\/v1\/?$/, "");
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace("/api/v1", "").replace(/\/$/, "");
 const V1   = `${BASE}/api/v1`;
 
 // ─── Auth token store (set by AuthProvider) ─────────────────────────────────
