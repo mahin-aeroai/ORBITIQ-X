@@ -1,160 +1,161 @@
 """
 ORBITIQ-X — OpenTelemetry Distributed Tracing
 ===============================================
-Initialises the OpenTelemetry SDK and instruments FastAPI, SQLAlchemy,
-Redis, and httpx with auto-instrumentation.
+Fully optional. The application starts normally whether or not
+any OpenTelemetry package is installed.
 
-Configuration (from Settings)
-──────────────────────────────
-  OTEL_EXPORTER_OTLP_ENDPOINT — gRPC collector endpoint (default: localhost:4317)
-  OTEL_SERVICE_NAME            — service name in traces (default: orbitiq-x-backend)
-  ORBITIQ_ENV                  — if "development", falls back to console exporter
+All imports are guarded with try/except. No import failure can
+crash the application or cause logging exceptions.
 
-Trace hierarchy
-───────────────
-  HTTP request
-    └── DB query  (SQLAlchemy auto-instrumentation)
-    └── Redis op  (redis-py auto-instrumentation if package installed)
-    └── Agent task execution  (manual spans)
-    └── Graph query  (manual spans)
-    └── Conjunction screening  (manual spans)
-    └── Digital Twin propagation  (manual spans)
-
-Graceful degradation
-──────────────────────
-  If the OTLP exporter cannot connect, tracing is silently disabled.
-  All other platform functionality remains operational.
+Environment control:
+  ENABLE_OTEL=false  — explicitly disable tracing (default: false in production
+                       unless OTEL_EXPORTER_OTLP_ENDPOINT is set)
 """
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import contextmanager
 from typing import Generator
 
+# Use stdlib logging only — structlog may not be configured yet when
+# this module is imported. Never use structlog here directly.
 logger = logging.getLogger(__name__)
 
-# ── Module-level tracer (set after init_tracing()) ────────────
+# Module-level tracer — None until init_tracing() succeeds
 _tracer = None
 
 
 def init_tracing(app=None) -> None:
     """
-    Initialise OpenTelemetry SDK. Called once from main.py lifespan.
+    Initialise OpenTelemetry SDK. Called from main.py lifespan.
 
-    Parameters
-    ----------
-    app : FastAPI | None
-        If provided, FastAPI instrumentation is attached.
+    Completely optional — any ImportError or runtime error is caught
+    and logged at INFO level. The application continues normally.
     """
     global _tracer
 
+    # ── Explicit opt-out via environment variable ──────────────
+    if os.environ.get("ENABLE_OTEL", "").lower() in ("false", "0", "no", "off"):
+        logger.info("otel_disabled: ENABLE_OTEL=false — tracing skipped")
+        return
+
+    # ── Check if OpenTelemetry SDK is available ────────────────
+    try:
+        import opentelemetry  # noqa: F401
+    except ImportError:
+        logger.info("otel_sdk_not_installed — tracing skipped (install opentelemetry-sdk to enable)")
+        return
+
+    # ── Full initialisation (all failures are non-fatal) ───────
     try:
         from opentelemetry import trace
         from opentelemetry.sdk.trace import TracerProvider
         from opentelemetry.sdk.trace.export import BatchSpanProcessor
         from opentelemetry.sdk.resources import Resource
 
-        from app.core.config import get_settings
-        settings = get_settings()
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            service_name = settings.OTEL_SERVICE_NAME
+            service_version = settings.ORBITIQ_VERSION
+            env = settings.ORBITIQ_ENV
+            otlp_endpoint = settings.OTEL_EXPORTER_OTLP_ENDPOINT
+        except Exception:
+            service_name = "orbitiq-x-backend"
+            service_version = "0.1.0"
+            env = os.environ.get("ORBITIQ_ENV", "production")
+            otlp_endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 
         resource = Resource.create({
-            "service.name":    settings.OTEL_SERVICE_NAME,
-            "service.version": settings.ORBITIQ_VERSION,
-            "deployment.environment": settings.ORBITIQ_ENV,
+            "service.name": service_name,
+            "service.version": service_version,
+            "deployment.environment": env,
         })
-
         provider = TracerProvider(resource=resource)
 
-        # ── Exporter selection ─────────────────────────────────
-        if settings.ORBITIQ_ENV == "development":
-            # Console exporter for dev — shows traces in logs
+        # ── Exporter ───────────────────────────────────────────
+        exporter_configured = False
+
+        if env == "development":
             try:
                 from opentelemetry.sdk.trace.export import ConsoleSpanExporter
-                provider.add_span_processor(
-                    BatchSpanProcessor(ConsoleSpanExporter())
-                )
+                provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+                exporter_configured = True
                 logger.info("otel_console_exporter_configured")
             except Exception as exc:
-                logger.debug("otel_console_exporter_failed error=%s", exc)
-        else:
-            # OTLP gRPC exporter for staging/production
+                logger.debug("otel_console_exporter_failed: %s", exc)
+        elif otlp_endpoint:
             try:
                 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-                otlp = OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
+                otlp = OTLPSpanExporter(endpoint=otlp_endpoint)
                 provider.add_span_processor(BatchSpanProcessor(otlp))
+                exporter_configured = True
+                logger.info("otel_otlp_exporter_configured endpoint=%s", otlp_endpoint)
+            except ImportError:
                 logger.info(
-                    "otel_otlp_exporter_configured endpoint=%s",
-                    settings.OTEL_EXPORTER_OTLP_ENDPOINT,
+                    "otel_otlp_exporter_not_installed — install opentelemetry-exporter-otlp-proto-grpc "
+                    "to enable OTLP export. Tracing continues without export."
                 )
             except Exception as exc:
-                import logging as _logging
-                _logging.getLogger(__name__).warning(
-                    "otel_otlp_exporter_failed: %s — tracing disabled", exc
-                )
-                return
+                logger.info("otel_otlp_exporter_failed: %s — tracing without export", exc)
+        else:
+            logger.info("otel_no_endpoint_configured — tracing initialised without exporter")
 
         trace.set_tracer_provider(provider)
-        _tracer = trace.get_tracer(settings.OTEL_SERVICE_NAME)
+        _tracer = trace.get_tracer(service_name)
 
-        # ── FastAPI auto-instrumentation ───────────────────────
+        # ── FastAPI instrumentation ────────────────────────────
         if app is not None:
             try:
                 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-                FastAPIInstrumentor.instrument_app(
-                    app,
-                    excluded_urls="/health,/metrics",
-                )
+                FastAPIInstrumentor.instrument_app(app, excluded_urls="/health,/metrics")
                 logger.info("otel_fastapi_instrumented")
             except Exception as exc:
-                logger.warning("otel_fastapi_instrument_failed error=%s", exc)
+                logger.debug("otel_fastapi_instrument_failed: %s", exc)
 
-        # ── SQLAlchemy auto-instrumentation ───────────────────
+        # ── SQLAlchemy instrumentation ─────────────────────────
         try:
             from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
             SQLAlchemyInstrumentor().instrument()
             logger.info("otel_sqlalchemy_instrumented")
         except Exception as exc:
-            logger.debug("otel_sqlalchemy_instrument_failed error=%s", exc)
+            logger.debug("otel_sqlalchemy_instrument_failed: %s", exc)
 
-        logger.info("otel_tracing_initialised service=%s", settings.OTEL_SERVICE_NAME)
+        logger.info("otel_tracing_initialised service=%s exporter=%s", service_name, exporter_configured)
 
-    except ImportError as exc:
-        logger.info("otel_sdk_not_available error=%s — tracing skipped", exc)
     except Exception as exc:
-        logger.warning("otel_init_failed error=%s — tracing disabled", exc)
+        # Catch-all — tracing must never crash the application
+        logger.info("otel_init_skipped: %s — application continues normally", exc)
+        _tracer = None
 
-
-# ── Manual span helpers ───────────────────────────────────────
 
 @contextmanager
-def trace_span(
-    name: str,
-    attributes: dict | None = None,
-) -> Generator:
+def trace_span(name: str, attributes: dict | None = None) -> Generator:
     """
-    Context manager for manual OpenTelemetry spans.
+    Context manager for manual spans. No-ops if tracing not initialised.
 
     Usage::
 
-        async def screen_conjunctions(catalog):
-            with trace_span("conjunction_screening", {"object_count": len(catalog)}):
-                ...
-
-    No-ops gracefully if tracing is not initialised.
+        with trace_span("conjunction_screening", {"object_count": len(catalog)}):
+            ...
     """
     if _tracer is None:
         yield
         return
 
-    from opentelemetry import trace
-    with _tracer.start_as_current_span(name) as span:
-        if attributes:
-            for k, v in attributes.items():
-                try:
-                    span.set_attribute(k, v)
-                except Exception:
-                    pass
-        yield span
+    try:
+        from opentelemetry import trace
+        with _tracer.start_as_current_span(name) as span:
+            if attributes:
+                for k, v in attributes.items():
+                    try:
+                        span.set_attribute(k, v)
+                    except Exception:
+                        pass
+            yield span
+    except Exception:
+        yield
 
 
 def get_tracer():
