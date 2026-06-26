@@ -91,7 +91,7 @@ def create_application() -> FastAPI:
         openapi_url=f"{settings.BACKEND_API_PREFIX}/openapi.json",
         docs_url=f"{settings.BACKEND_API_PREFIX}/docs",
         redoc_url=f"{settings.BACKEND_API_PREFIX}/redoc",
-        default_response_class=ORJSONResponse,
+        # default_response_class uses JSONResponse (ORJSONResponse deprecated)
         lifespan=lifespan,
         contact={
             "name": "Mahin Nandipa",
