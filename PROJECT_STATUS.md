@@ -85,7 +85,9 @@ Backend deployed, frontend deployed, authentication working. Configuring externa
 | Database | ✅ | PostgreSQL HEALTHY, 416ms latency |
 | Migrations | ✅ | 10/10 applied, at head `0010_add_fk_user_sessions` |
 | API imports | ✅ | All 12 routers import cleanly, 0 exceptions |
-| FastAPI deprecations | ✅ | Zero DeprecationWarnings |
+| FastAPI deprecations | ✅ | Zero DeprecationWarnings — `regex=` → `pattern=` fixed |
+| OpenTelemetry | ✅ | Fully optional — `ImportError` caught, startup unaffected |
+| structlog | ✅ | `_safe_add_logger_name` prevents NoneType crash |
 | Frontend build | ✅ | `npm run build` passes, 9/9 static pages |
 | Auth flow | ✅ | Register → Login → JWT → refresh all working |
 | Unit tests | ⚠️ | 493 passed, 68 failed (test env issues, not production bugs) |
