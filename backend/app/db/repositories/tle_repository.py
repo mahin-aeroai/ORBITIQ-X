@@ -35,7 +35,10 @@ from .base import BaseRepository
 logger = logging.getLogger(__name__)
 
 _SOURCE_PRIORITY = {"spacetrack": 3, "celestrak": 2, "manual": 1, "sensor": 0}
-_BULK_BATCH = 5000  # TLE records are smaller than satellites
+# PostgreSQL bind-parameter limit is 32767.
+# TLERecord has 27 insertable columns → max safe rows = 32767 // 27 = 1213.
+# Using 1000 for a safe margin.
+_BULK_BATCH = 1000
 
 
 class TLERepository(BaseRepository[TLERecord]):

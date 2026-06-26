@@ -39,7 +39,10 @@ from .base import BaseRepository
 logger = logging.getLogger(__name__)
 
 # ── Batch size for bulk upsert ────────────────────────────────
-_BULK_BATCH = 2000  # rows per INSERT statement
+# PostgreSQL bind-parameter limit is 32767.
+# Satellite has 41 insertable columns → max safe rows = 32767 // 41 = 799.
+# Using 500 for a safe margin.
+_BULK_BATCH = 500
 
 
 class SatelliteRepository(BaseRepository[Satellite]):
