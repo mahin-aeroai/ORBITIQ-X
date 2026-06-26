@@ -103,14 +103,15 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        # Set search_path so schema-prefixed tables resolve correctly
+        # Set search_path so all tables resolve to public schema
         connection.execute(text("SET search_path TO public"))
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,              # detect column type changes
             compare_server_default=True,    # detect default value changes
-            include_schemas=True,
+            include_schemas=False,
+            version_table_schema="public",
             render_item=_render_item,
             # Custom batch mode for SQLite (not needed for PG but harmless)
             render_as_batch=False,
