@@ -41,7 +41,7 @@ class User(Base):
     sessions: Mapped[list["UserSession"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    audit_logs: Mapped[list["AuditLog"]] = relationship(back_populates="user")  # type: ignore[name-defined]
+    # audit_logs relationship omitted — AuditLog defined in separate module
 
     __table_args__ = (
         Index("ix_users_email", "email"),
