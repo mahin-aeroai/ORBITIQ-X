@@ -82,7 +82,6 @@ class AuditLog(Base):
         comment="Agent task UUID")
 
     user: Mapped[Optional["User"]] = relationship(  # type: ignore[name-defined]
-        back_populates="audit_logs",
         primaryjoin="AuditLog.user_id == User.id",
         foreign_keys=[user_id],
     )
