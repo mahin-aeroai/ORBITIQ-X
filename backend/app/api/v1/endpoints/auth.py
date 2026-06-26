@@ -237,9 +237,9 @@ async def login(
         user_id=user.id, email=user.email,
         username=user.username, role=user.role,
     )
-    refresh_token = await _create_session(session, user, request)
 
-    # ── Update user login stats ───────────────────────────────
+    # ── Update user login stats BEFORE creating session ───────
+    # (must commit before _create_session to avoid session state conflict)
     await session.execute(
         update(User)
         .where(User.id == user.id)
@@ -251,6 +251,9 @@ async def login(
         )
     )
     await session.commit()
+
+    # ── Create refresh token session ──────────────────────────
+    refresh_token = await _create_session(session, user, request)
 
     # ── Audit ─────────────────────────────────────────────────
     await log_auth_event(
