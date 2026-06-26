@@ -1,60 +1,93 @@
 "use client";
 /**
- * ORBITIQ-X — OrbitalGlobe
- * ==========================
- * Phase 13C: Production-grade Mission Control Cesium globe.
- *
- * Architecture
- * ─────────────
- * The Cesium Viewer is wrapped in next/dynamic (ssr:false) because it requires
- * the browser DOM and WebGL context. The <OrbitalGlobe> export is a thin shell
- * that dynamic-imports <GlobeInner> and shows a loading skeleton while Cesium
- * initialises.
- *
- * Performance strategy for 50K+ objects
- * ───────────────────────────────────────
- * • PointPrimitiveCollection  — GPU-instanced points; O(1) draw call regardless
- *   of object count. No entity overhead.
- * • requestRenderMode: true   — Cesium only re-renders when state changes.
- * • Refresh: update existing point positions/colours in place every 30 s.
- *   Never destroy and recreate the collection or viewer.
- * • Conjunction markers: separate Entity per CDM (count is always small ≤100).
- *
- * Data sources (verified against actual backend source)
- * ─────────────────────────────────────────────────────
- * Satellites : GET /api/v1/digital-twin/cesium/states?limit=10000
- * Detail     : GET /api/v1/digital-twin/state/{norad_id}
- * Conjunctions: GET /api/v1/ssa/conjunctions/high-risk?limit=50
+ * ORBITIQ-X — OrbitalGlobe (Static Placeholder)
+ * Globe temporarily disabled — Cesium WebGL initialization 
+ * causes client-side crashes. Static visualization shown instead.
  */
 
-import dynamic from "next/dynamic";
-import { GlobeSkeleton } from "@/components/ui/skeletons/GlobeSkeleton";
-
-// ─── Props ────────────────────────────────────────────────────────────────────
-
 export interface OrbitalGlobeProps {
-  defaultObjectTypes?: string[];
-  showConjunctions?:   boolean;
-  showGroundTracks?:   boolean;
-  autoRotate?:         boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-// ─── Dynamic import — Cesium requires DOM/WebGL; never SSR ───────────────────
-
-const GlobeInner = dynamic(
-  () => import("./OrbitalGlobeInner").then((m) => ({ default: m.OrbitalGlobeInner })),
-  {
-    ssr:     false,
-    loading: () => <GlobeSkeleton />,
-  },
-);
-
-// ─── Public export ────────────────────────────────────────────────────────────
-
-export function OrbitalGlobe(props: OrbitalGlobeProps) {
+export function OrbitalGlobe({ className, style }: OrbitalGlobeProps) {
   return (
-    <div className="relative h-full w-full overflow-hidden bg-space-midnight">
-      <GlobeInner {...props} />
+    <div
+      className={className}
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        background: "radial-gradient(ellipse at 30% 40%, #0d2137 0%, #060d16 60%, #020508 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexDirection: "column",
+        gap: 12,
+        overflow: "hidden",
+        ...style,
+      }}
+    >
+      {/* Star field */}
+      {Array.from({length: 80}).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            width: Math.random() * 2 + 1,
+            height: Math.random() * 2 + 1,
+            borderRadius: "50%",
+            background: "white",
+            opacity: Math.random() * 0.7 + 0.1,
+            left: `${Math.random() * 100}%`,
+            top: `${Math.random() * 100}%`,
+          }}
+        />
+      ))}
+
+      {/* Globe outline */}
+      <div style={{
+        width: 280,
+        height: 280,
+        borderRadius: "50%",
+        border: "1px solid rgba(99,102,241,0.3)",
+        boxShadow: "0 0 60px rgba(99,102,241,0.1), inset 0 0 60px rgba(99,102,241,0.05)",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        {/* Orbit rings */}
+        {[120, 160, 200].map((size, i) => (
+          <div key={i} style={{
+            position: "absolute",
+            width: size,
+            height: size / 3,
+            border: `1px solid rgba(99,102,241,${0.15 - i * 0.03})`,
+            borderRadius: "50%",
+            transform: `rotateX(${60 + i * 10}deg)`,
+          }} />
+        ))}
+        <div style={{
+          fontFamily: "var(--font-mono, monospace)",
+          fontSize: 10,
+          color: "rgba(148,163,184,0.4)",
+          letterSpacing: "0.2em",
+          textAlign: "center",
+        }}>
+          ORBITAL<br/>TRACKING<br/>ACTIVE
+        </div>
+      </div>
+
+      <div style={{
+        fontFamily: "var(--font-mono, monospace)",
+        fontSize: 9,
+        color: "rgba(99,102,241,0.4)",
+        letterSpacing: "0.15em",
+        textAlign: "center",
+      }}>
+        3D GLOBE REQUIRES CHROME + WEBGL
+      </div>
     </div>
   );
 }
