@@ -8,30 +8,6 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { OrbitalGlobe } from "@/components/orbital/OrbitalGlobe";
-import { Component, type ReactNode } from "react";
-
-class GlobeErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
-  state = { failed: false };
-  static getDerivedStateFromError() { return { failed: true }; }
-  render() {
-    if (this.state.failed) {
-      return (
-        <div style={{
-          display:"flex",height:"100%",alignItems:"center",justifyContent:"center",
-          background:"radial-gradient(ellipse at center, #0d1b2e 0%, #060d16 100%)",
-          border:"1px solid rgba(99,102,241,0.15)",borderRadius:8,
-          color:"rgba(148,163,184,0.5)",fontFamily:"var(--font-mono)",fontSize:11,
-          flexDirection:"column",gap:8
-        }}>
-          <div style={{fontSize:32,opacity:0.3}}>🌐</div>
-          <div>3D ORBITAL GLOBE UNAVAILABLE</div>
-          <div style={{fontSize:9,opacity:0.6}}>WebGL / Cesium not supported in this browser</div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 import { ConjunctionAlertPanel } from "@/components/ssa/ConjunctionAlertPanel";
 import { SpaceWeatherWidget } from "@/components/ssa/SpaceWeatherWidget";
 import { CatalogStatsCard } from "@/components/orbital/CatalogStatsCard";
@@ -61,12 +37,12 @@ export default function MissionControlPage() {
         {/* ── 3D Globe (2/3 width) ─────────────────────────────────────── */}
         <div className="relative flex-[2] overflow-hidden border-r border-space-border">
           <Suspense fallback={<GlobeSkeleton />}>
-            <GlobeErrorBoundary><OrbitalGlobe
+            <OrbitalGlobe
               defaultObjectTypes={["PAYLOAD", "DEBRIS"]}
               showConjunctions
               showGroundTracks
               autoRotate={false}
-            /></GlobeErrorBoundary>
+            />
           </Suspense>
         </div>
 
