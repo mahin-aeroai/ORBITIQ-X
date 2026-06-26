@@ -8,6 +8,22 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { OrbitalGlobe } from "@/components/orbital/OrbitalGlobe";
+import { Component, type ReactNode } from "react";
+
+class GlobeErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="flex h-full items-center justify-center" style={{color:"var(--color-text-secondary)",fontFamily:"var(--font-mono)",fontSize:11}}>
+          3D globe unavailable — WebGL required
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { ConjunctionAlertPanel } from "@/components/ssa/ConjunctionAlertPanel";
 import { SpaceWeatherWidget } from "@/components/ssa/SpaceWeatherWidget";
 import { CatalogStatsCard } from "@/components/orbital/CatalogStatsCard";
@@ -37,12 +53,12 @@ export default function MissionControlPage() {
         {/* ── 3D Globe (2/3 width) ─────────────────────────────────────── */}
         <div className="relative flex-[2] overflow-hidden border-r border-space-border">
           <Suspense fallback={<GlobeSkeleton />}>
-            <OrbitalGlobe
+            <GlobeErrorBoundary><OrbitalGlobe
               defaultObjectTypes={["PAYLOAD", "DEBRIS"]}
               showConjunctions
               showGroundTracks
               autoRotate={false}
-            />
+            /></GlobeErrorBoundary>
           </Suspense>
         </div>
 
