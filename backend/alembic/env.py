@@ -108,16 +108,12 @@ def run_migrations_online() -> None:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            compare_type=True,              # detect column type changes
-            compare_server_default=True,    # detect default value changes
+            compare_type=True,
+            compare_server_default=True,
             include_schemas=False,
             version_table_schema="public",
             render_item=_render_item,
-            # Custom batch mode for SQLite (not needed for PG but harmless)
             render_as_batch=False,
-            # Generate "NOT VALID" constraints to avoid full-table locks
-            # on large tables during FK additions
-            transaction_per_migration=True,
         )
         with context.begin_transaction():
             context.run_migrations()
