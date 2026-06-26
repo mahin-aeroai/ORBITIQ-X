@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const COOKIE_NAME = "orbitiq_refresh";
-const API_BASE    = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace("/api/v1", "").replace(/\/$/, "");
+const API_BASE    = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").split("/api/v1")[0].replace(/\/$/, "");
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const refreshToken = req.cookies.get(COOKIE_NAME)?.value;
