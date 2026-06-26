@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import BigInteger, Boolean, DateTime, Index, String, Text, func
+from sqlalchemy import ForeignKey, BigInteger, Boolean, DateTime, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base_model import Base
 
@@ -56,6 +56,7 @@ class UserSession(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         BigInteger,
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
         comment="FK → users.id"
