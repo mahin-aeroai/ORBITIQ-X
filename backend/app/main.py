@@ -102,6 +102,7 @@ def create_application() -> FastAPI:
     )
 
     _register_middleware(app)
+    _register_exception_handlers(app)
     _register_routers(app)
     _register_prometheus(app)
 
@@ -186,6 +187,32 @@ def _register_middleware(app: FastAPI) -> None:
                 process_ms=process_ms,
             )
             return response
+
+
+def _register_exception_handlers(app: FastAPI) -> None:
+    """Register global exception handlers."""
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+    from fastapi.exceptions import RequestValidationError
+    import traceback
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        tb = traceback.format_exc()
+        logger.error("unhandled_exception path=%s error=%s trace=%s",
+                     request.url.path, str(exc), tb[:500])
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "code": 500,
+                     "message": str(exc)[:200], "type": type(exc).__name__},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_exception_handler(request: Request, exc: RequestValidationError):
+        return JSONResponse(
+            status_code=422,
+            content={"status": "error", "code": 422, "detail": exc.errors()},
+        )
 
 
 def _register_routers(app: FastAPI) -> None:
