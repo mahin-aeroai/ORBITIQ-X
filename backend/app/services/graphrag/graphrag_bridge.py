@@ -331,6 +331,40 @@ class GraphContextFetcher:
             top_ops = await analytics.top_operators_by_satellite_count(limit=5)
             ctx["top_operators"] = top_ops
 
+        # Fallback: if analytics returned no regime data, query directly
+        # using the actual relationship names in the database (ORBITS).
+        # The analytics service uses LOCATED_IN_ORBIT which may not exist.
+        if not ctx["regimes"] and is_available():
+            try:
+                from app.graph.connection import get_driver
+                from app.core.config import get_settings
+                _s = get_settings()
+                _driver = get_driver()
+                async with _driver.session(database=_s.NEO4J_DATABASE) as _session:
+                    _r = await _session.run("""
+                        MATCH (s:Satellite)-[:ORBITS]->(o:OrbitalRegime)
+                        RETURN o.orbitId AS regimeId,
+                               o.name AS regime,
+                               count(s) AS totalObjects,
+                               count(CASE WHEN s.objectType = 'debris' THEN 1 END) AS debris
+                        ORDER BY totalObjects DESC
+                    """)
+                    ctx["regimes"] = [dict(r) async for r in _r]
+
+                    _r2 = await _session.run("""
+                        MATCH (s:Satellite)
+                        RETURN count(s) AS totalSatellites,
+                               count(CASE WHEN s.regime = 'LEO' THEN 1 END) AS leo,
+                               count(CASE WHEN s.regime = 'GEO' THEN 1 END) AS geo,
+                               count(CASE WHEN s.regime = 'MEO' THEN 1 END) AS meo,
+                               count(CASE WHEN s.regime = 'HEO' THEN 1 END) AS heo
+                    """)
+                    rec = await _r2.single()
+                    if rec:
+                        ctx["catalog_summary"] = dict(rec)
+            except Exception as _exc:
+                logger.warning("graph_direct_query_failed error=%s", _exc)
+
         return ctx
 
 
