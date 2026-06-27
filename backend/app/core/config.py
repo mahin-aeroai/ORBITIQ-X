@@ -113,7 +113,7 @@ class Settings(BaseSettings):
     NEO4J_BOLT_PORT: int = 7687
     NEO4J_USER: str = "neo4j"
     NEO4J_PASSWORD: SecretStr = Field(default="not-configured")
-    NEO4J_DATABASE: str = "orbitiq"
+    NEO4J_DATABASE: str = "bff8c462"
 
     @property
      def NEO4J_URI(self) -> str:
