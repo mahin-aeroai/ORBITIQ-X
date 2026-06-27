@@ -87,6 +87,7 @@ class ChunkMetadata:
     has_equations:    bool            = False
     source_url:       Optional[str]   = None
     doc_title:        str             = ""
+    authors:          list[str]       = field(default_factory=list)
 
 
 @dataclass
@@ -131,6 +132,9 @@ class CitationRecord:
     source_url:        Optional[str] = None
     relevance_score:   float         = 0.0
     excerpt:           str           = ""
+    authors:           list[str]     = field(default_factory=list)
+    title:             str           = ""
+    doc_id:            str           = ""
 
 
 @dataclass
