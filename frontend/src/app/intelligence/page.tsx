@@ -2,8 +2,8 @@
 /**
  * ORBITIQ-X — AI Intelligence Workspace (v0.4.0)
  * =================================================
- * Conversational aerospace intelligence interface.
- * Full GraphRAG pipeline: query → embed → vector → graph → agents → Claude → answer.
+ * GraphRAG pipeline: embed → vector → graph → Claude synthesis.
+ * Avg latency 28s — pipeline animation stays active during full fetch.
  */
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -12,14 +12,14 @@ import { getApiAccessToken } from "@/lib/api";
 const V1 = "/api/v1";
 
 interface Message {
-  id:         string;
-  role:       "user" | "assistant";
-  content:    string;
-  latency?:   number;
-  mode?:      string;
+  id:          string;
+  role:        "user" | "assistant";
+  content:     string;
+  latency?:    number;
+  mode?:       string;
   confidence?: number;
-  timestamp:  Date;
-  error?:     boolean;
+  timestamp:   Date;
+  error?:      boolean;
 }
 
 const EXAMPLE_QUERIES = [
@@ -33,56 +33,51 @@ const EXAMPLE_QUERIES = [
 ];
 
 const PIPELINE_STEPS = [
-  { id: "embed",  label: "Embed Query",       icon: "◈", desc: "all-MiniLM-L6-v2 · 384-dim" },
-  { id: "vector", label: "Vector Retrieval",  icon: "◑", desc: "Qdrant · 185 chunks" },
-  { id: "graph",  label: "Knowledge Graph",   icon: "◉", desc: "Neo4j · 29,248 nodes" },
-  { id: "synth",  label: "Claude Synthesis",  icon: "⊕", desc: "claude-sonnet-4-6" },
+  { id: "embed",  label: "Embedding query",      icon: "◈", desc: "all-MiniLM-L6-v2 · 384-dim",     ms: 200  },
+  { id: "vector", label: "Vector retrieval",     icon: "◑", desc: "Qdrant · 185 aerospace chunks",   ms: 1500 },
+  { id: "graph",  label: "Knowledge graph",      icon: "◉", desc: "Neo4j · 29,248 satellite nodes",  ms: 3000 },
+  { id: "claude", label: "Claude synthesizing",  icon: "⊕", desc: "claude-sonnet-4-6 · streaming",  ms: null },
 ];
 
-// Simple markdown-like renderer for answer text
+// Markdown renderer
 function AnswerText({ content }: { content: string }) {
-  const lines = content.split("\n");
   return (
-    <div className="space-y-1">
-      {lines.map((line, i) => {
+    <div className="space-y-1.5">
+      {content.split("\n").map((line, i) => {
+        if (!line.trim()) return <div key={i} className="h-1" />;
         if (line.startsWith("## ")) return (
           <h3 key={i} className="mt-3 font-display text-[13px] font-semibold text-[var(--color-text-primary)] first:mt-0">
             {line.slice(3)}
           </h3>
         );
         if (line.startsWith("### ")) return (
-          <h4 key={i} className="mt-2 font-display text-[11px] font-semibold text-[var(--color-accent-indigo-bright)]">
+          <h4 key={i} className="mt-2 font-mono text-[10px] font-semibold uppercase tracking-wider text-[var(--color-accent-indigo-bright)]">
             {line.slice(4)}
           </h4>
         );
-        if (line.startsWith("**") && line.endsWith("**") && line.length > 4) return (
-          <p key={i} className="font-display text-[11px] font-semibold text-[var(--color-text-primary)]">
-            {line.slice(2, -2)}
-          </p>
+        if (line.startsWith("---")) return (
+          <div key={i} className="my-2 border-t border-[var(--color-space-border)]" />
         );
         if (line.startsWith("- ") || line.startsWith("• ")) return (
-          <p key={i} className="flex gap-2 font-body text-[11px] leading-relaxed text-[var(--color-text-primary)]">
-            <span className="mt-1 h-1 w-1 shrink-0 rounded-full bg-[var(--color-accent-indigo)]" />
-            <span>{line.slice(2)}</span>
-          </p>
+          <div key={i} className="flex gap-2">
+            <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-[var(--color-accent-indigo)]" />
+            <span className="font-body text-[12px] leading-relaxed text-[var(--color-text-primary)]">
+              {line.slice(2)}
+            </span>
+          </div>
         );
         if (line.startsWith("> ")) return (
           <blockquote key={i} className="border-l-2 border-[var(--color-accent-indigo)] pl-3 font-mono text-[10px] italic text-[var(--color-text-secondary)]">
             {line.slice(2)}
           </blockquote>
         );
-        if (line.startsWith("---")) return (
-          <div key={i} className="my-2 border-t border-[var(--color-space-border)]" />
-        );
-        if (!line.trim()) return <div key={i} className="h-1" />;
-        // Bold inline text
+        // Inline bold
         const parts = line.split(/\*\*(.*?)\*\*/g);
         return (
           <p key={i} className="font-body text-[12px] leading-relaxed text-[var(--color-text-primary)]">
-            {parts.map((part, j) =>
-              j % 2 === 1
-                ? <strong key={j} className="font-semibold text-[var(--color-text-primary)]">{part}</strong>
-                : part
+            {parts.map((p, j) => j % 2 === 1
+              ? <strong key={j} className="font-semibold">{p}</strong>
+              : p
             )}
           </p>
         );
@@ -92,13 +87,16 @@ function AnswerText({ content }: { content: string }) {
 }
 
 export default function IntelligencePage() {
-  const [messages,    setMessages]    = useState<Message[]>([]);
-  const [input,       setInput]       = useState("");
-  const [loading,     setLoading]     = useState(false);
-  const [activeStep,  setActiveStep]  = useState<string | null>(null);
-  const [completedSteps, setCompletedSteps] = useState<Set<string>>(new Set());
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLTextAreaElement>(null);
+  const [messages,        setMessages]        = useState<Message[]>([]);
+  const [input,           setInput]           = useState("");
+  const [loading,         setLoading]         = useState(false);
+  const [activeStepIdx,   setActiveStepIdx]   = useState(-1);
+  const [completedSteps,  setCompletedSteps]  = useState<Set<number>>(new Set());
+  const [elapsedMs,       setElapsedMs]       = useState(0);
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const inputRef    = useRef<HTMLTextAreaElement>(null);
+  const timerRef    = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startTimeRef = useRef<number>(0);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -107,20 +105,33 @@ export default function IntelligencePage() {
   const sendQuery = useCallback(async (query: string) => {
     if (!query.trim() || loading) return;
 
-    setMessages(prev => [...prev, {
-      id: crypto.randomUUID(), role: "user", content: query.trim(), timestamp: new Date(),
-    }]);
+    const trimmed = query.trim();
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "user", content: trimmed, timestamp: new Date() }]);
     setInput("");
     setLoading(true);
+    setActiveStepIdx(0);
     setCompletedSteps(new Set());
+    setElapsedMs(0);
 
-    // Animate through pipeline steps
-    for (const step of PIPELINE_STEPS) {
-      setActiveStep(step.id);
-      await new Promise(r => setTimeout(r, 800));
-      setCompletedSteps(prev => new Set([...prev, step.id]));
-    }
-    setActiveStep(null);
+    // Start elapsed timer
+    startTimeRef.current = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsedMs(Date.now() - startTimeRef.current);
+    }, 500);
+
+    // Animate first 3 steps with known timings
+    const animate = async () => {
+      for (let i = 0; i < PIPELINE_STEPS.length - 1; i++) {
+        const step = PIPELINE_STEPS[i];
+        setActiveStepIdx(i);
+        await new Promise(r => setTimeout(r, step.ms ?? 1000));
+        setCompletedSteps(prev => new Set([...prev, i]));
+      }
+      // Last step (Claude) stays active until response
+      setActiveStepIdx(PIPELINE_STEPS.length - 1);
+    };
+
+    animate();
 
     const t0 = Date.now();
     try {
@@ -131,13 +142,18 @@ export default function IntelligencePage() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({ query: trimmed }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => `HTTP ${res.status}`);
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
+      }
+
       const data = await res.json();
       const latency = Date.now() - t0;
 
+      setCompletedSteps(new Set([0, 1, 2, 3]));
       setMessages(prev => [...prev, {
         id: crypto.randomUUID(), role: "assistant",
         content: data.answer ?? data.response ?? "No answer returned.",
@@ -151,17 +167,20 @@ export default function IntelligencePage() {
         timestamp: new Date(),
       }]);
     } finally {
+      if (timerRef.current) clearInterval(timerRef.current);
       setLoading(false);
-      setCompletedSteps(new Set());
+      setActiveStepIdx(-1);
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [loading]);
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendQuery(input);
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuery(input); }
+  };
+
+  const formatElapsed = (ms: number) => {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
   };
 
   return (
@@ -172,12 +191,10 @@ export default function IntelligencePage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-base text-[var(--color-accent-indigo-bright)]">◈</span>
-            <h1 className="font-display text-sm font-semibold text-[var(--color-text-primary)]">
-              AI Intelligence Workspace
-            </h1>
+            <h1 className="font-display text-sm font-semibold text-[var(--color-text-primary)]">AI Intelligence Workspace</h1>
           </div>
           <p className="mt-0.5 font-mono text-[9px] text-[var(--color-text-tertiary)]">
-            GraphRAG · 185 chunks · 29,248 Neo4j nodes · claude-sonnet-4-6 · full_graphrag mode
+            GraphRAG · 185 chunks · 29,248 Neo4j nodes · claude-sonnet-4-6 · avg 28s
           </p>
         </div>
         <div className="flex items-center gap-1.5">
@@ -187,39 +204,40 @@ export default function IntelligencePage() {
       </div>
 
       {/* ── Pipeline visualization ───────────────────────────────────────── */}
-      <div className="flex shrink-0 items-center border-b border-[var(--color-space-border)] bg-[var(--color-space-navy)] px-4 py-2">
+      <div className="flex shrink-0 items-center gap-1 border-b border-[var(--color-space-border)] bg-[var(--color-space-navy)] px-4 py-2">
         {PIPELINE_STEPS.map((step, i) => {
-          const isActive    = activeStep === step.id;
-          const isCompleted = completedSteps.has(step.id);
+          const isActive    = loading && activeStepIdx === i;
+          const isCompleted = completedSteps.has(i);
+          const isPending   = loading && activeStepIdx < i && !isCompleted;
           return (
             <div key={step.id} className="flex items-center">
-              <div
-                className="flex items-center gap-1.5 rounded px-2 py-1 transition-all duration-300"
+              <div className="flex items-center gap-1.5 rounded px-2 py-1 transition-all duration-300"
                 style={{
-                  backgroundColor: isActive ? "var(--color-accent-indigo-glow)" : "transparent",
-                  color: isActive
-                    ? "var(--color-accent-indigo-bright)"
-                    : isCompleted
-                    ? "var(--color-accent-green-bright)"
-                    : "var(--color-text-tertiary)",
-                }}
-              >
-                <span className={`text-sm transition-all ${isActive ? "animate-pulse" : ""}`}>{step.icon}</span>
+                  backgroundColor: isActive ? "rgba(99,102,241,0.15)" : "transparent",
+                  color: isActive ? "#818cf8" : isCompleted ? "#34d399" : isPending ? "#475569" : "var(--color-text-tertiary)",
+                }}>
+                <span className={`text-sm ${isActive ? "animate-pulse" : ""}`}>{step.icon}</span>
                 <div className="hidden sm:block">
                   <div className="font-mono text-[9px] font-semibold">{step.label}</div>
                   <div className="font-mono text-[8px] opacity-60">{step.desc}</div>
                 </div>
-                {isCompleted && <span className="font-mono text-[9px] text-[var(--color-accent-green-bright)]">✓</span>}
+                {isCompleted && <span className="text-[9px] text-[#34d399]">✓</span>}
+                {isActive && step.id === "claude" && loading && (
+                  <span className="font-mono text-[9px] text-[#818cf8]">{formatElapsed(elapsedMs)}</span>
+                )}
               </div>
               {i < PIPELINE_STEPS.length - 1 && (
-                <span
-                  className="mx-1 font-mono text-xs transition-colors"
-                  style={{ color: isCompleted ? "var(--color-accent-green-bright)" : "var(--color-space-border-strong)" }}
-                >→</span>
+                <span className="mx-1 font-mono text-xs"
+                  style={{ color: isCompleted ? "#34d399" : "var(--color-space-border-strong)" }}>→</span>
               )}
             </div>
           );
         })}
+        {loading && (
+          <span className="ml-auto font-mono text-[9px] text-[var(--color-text-tertiary)]">
+            {formatElapsed(elapsedMs)} elapsed
+          </span>
+        )}
       </div>
 
       {/* ── Messages ─────────────────────────────────────────────────────── */}
@@ -232,31 +250,29 @@ export default function IntelligencePage() {
               <h2 className="mb-1 font-display text-base font-semibold text-[var(--color-text-primary)]">
                 Aerospace Intelligence Ready
               </h2>
-              <p className="max-w-xs font-mono text-[10px] leading-relaxed text-[var(--color-text-tertiary)]">
-                Ask about orbital mechanics, conjunction analysis, debris mitigation, spacecraft systems, launch vehicles, or space missions.
+              <p className="max-w-sm font-mono text-[10px] leading-relaxed text-[var(--color-text-tertiary)]">
+                Ask about orbital mechanics, conjunction analysis, debris mitigation, spacecraft systems, or space missions.
+              </p>
+              <p className="mt-1 font-mono text-[9px] text-[var(--color-accent-amber)]">
+                Note: queries take ~28 seconds (Claude synthesis)
               </p>
             </div>
 
-            {/* Example queries */}
             <div className="grid w-full max-w-2xl grid-cols-1 gap-2 sm:grid-cols-2">
               {EXAMPLE_QUERIES.map((q, i) => (
-                <button
-                  key={i}
-                  onClick={() => sendQuery(q)}
-                  className="rounded border border-[var(--color-space-border)] bg-[var(--color-space-surface)] px-3 py-2.5 text-left font-mono text-[10px] leading-relaxed text-[var(--color-text-secondary)] transition-all hover:border-[var(--color-accent-indigo)] hover:bg-[var(--color-accent-indigo-glow)] hover:text-[var(--color-text-primary)]"
-                >
+                <button key={i} onClick={() => sendQuery(q)}
+                  className="rounded border border-[var(--color-space-border)] bg-[var(--color-space-surface)] px-3 py-2.5 text-left font-mono text-[10px] leading-relaxed text-[var(--color-text-secondary)] transition-all hover:border-[#6366f1] hover:bg-[rgba(99,102,241,0.08)] hover:text-[var(--color-text-primary)]">
                   {q}
                 </button>
               ))}
             </div>
 
-            {/* Corpus stats */}
-            <div className="flex gap-4 rounded border border-[var(--color-space-border)] bg-[var(--color-space-navy)] px-4 py-2.5">
+            <div className="flex gap-6 rounded border border-[var(--color-space-border)] bg-[var(--color-space-navy)] px-5 py-3">
               {[
-                { label: "Corpus chunks", value: "185", color: "var(--color-accent-indigo-bright)" },
-                { label: "Domains",       value: "12",  color: "var(--color-accent-green-bright)" },
-                { label: "Graph nodes",   value: "29,248", color: "var(--color-accent-amber-bright)" },
-                { label: "Retrieval",     value: "100%", color: "var(--color-accent-green-bright)" },
+                { label: "Corpus chunks", value: "185",    color: "#818cf8" },
+                { label: "Domains",       value: "12",     color: "#34d399" },
+                { label: "Graph nodes",   value: "29,248", color: "#fbbf24" },
+                { label: "Retrieval",     value: "100%",   color: "#34d399" },
               ].map(({ label, value, color }) => (
                 <div key={label} className="text-center">
                   <div className="font-mono text-sm font-bold tabular-nums" style={{ color }}>{value}</div>
@@ -270,80 +286,63 @@ export default function IntelligencePage() {
         {messages.map((msg) => (
           <div key={msg.id} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             {msg.role === "assistant" && (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[var(--color-accent-indigo)] bg-[var(--color-accent-indigo-glow)] font-mono text-xs text-[var(--color-accent-indigo-bright)]">
-                ◈
-              </div>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[#6366f1] bg-[rgba(99,102,241,0.12)] font-mono text-xs text-[#818cf8]">◈</div>
             )}
-            <div
-              className={`max-w-2xl rounded-lg border px-4 py-3 ${
-                msg.role === "user"
-                  ? "border-[var(--color-space-border-strong)] bg-[var(--color-space-elevated)]"
-                  : msg.error
-                  ? "border-[var(--color-accent-red)] bg-[rgba(239,68,68,0.05)]"
-                  : "border-[var(--color-space-border)] bg-[var(--color-space-navy)]"
-              }`}
-            >
-              {msg.role === "user" ? (
-                <p className="font-body text-[12px] leading-relaxed text-[var(--color-text-primary)]">{msg.content}</p>
-              ) : (
-                <AnswerText content={msg.content} />
-              )}
-
+            <div className={`max-w-2xl rounded-lg border px-4 py-3 ${
+              msg.role === "user"
+                ? "border-[var(--color-space-border-strong)] bg-[var(--color-space-elevated)]"
+                : msg.error
+                ? "border-[#ef4444] bg-[rgba(239,68,68,0.05)]"
+                : "border-[var(--color-space-border)] bg-[var(--color-space-navy)]"
+            }`}>
+              {msg.role === "user"
+                ? <p className="font-body text-[12px] leading-relaxed text-[var(--color-text-primary)]">{msg.content}</p>
+                : <AnswerText content={msg.content} />
+              }
               {msg.role === "assistant" && !msg.error && (
-                <div className="mt-2.5 flex flex-wrap items-center gap-3 border-t border-[var(--color-space-border)] pt-2">
+                <div className="mt-2 flex flex-wrap items-center gap-3 border-t border-[var(--color-space-border)] pt-2">
                   {msg.latency != null && (
-                    <span className="font-mono text-[9px] text-[var(--color-text-tertiary)]">
-                      ⏱ {(msg.latency / 1000).toFixed(1)}s
-                    </span>
+                    <span className="font-mono text-[9px] text-[var(--color-text-tertiary)]">⏱ {(msg.latency / 1000).toFixed(1)}s</span>
                   )}
                   {msg.mode && (
-                    <span className="rounded border border-[var(--color-accent-indigo)] bg-[var(--color-accent-indigo-glow)] px-1.5 py-0.5 font-mono text-[8px] text-[var(--color-accent-indigo-bright)]">
-                      {msg.mode}
-                    </span>
+                    <span className="rounded border border-[#6366f1] bg-[rgba(99,102,241,0.1)] px-1.5 py-0.5 font-mono text-[8px] text-[#818cf8]">{msg.mode}</span>
                   )}
                   {msg.confidence != null && (
-                    <span className="font-mono text-[9px] text-[var(--color-text-tertiary)]">
-                      conf {(msg.confidence * 100).toFixed(0)}%
-                    </span>
+                    <span className="font-mono text-[9px] text-[var(--color-text-tertiary)]">conf {(msg.confidence * 100).toFixed(0)}%</span>
                   )}
-                  <span className="ml-auto font-mono text-[9px] text-[var(--color-text-tertiary)]">
-                    {msg.timestamp.toLocaleTimeString()}
-                  </span>
+                  <span className="ml-auto font-mono text-[9px] text-[var(--color-text-tertiary)]">{msg.timestamp.toLocaleTimeString()}</span>
                 </div>
               )}
             </div>
             {msg.role === "user" && (
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[var(--color-space-border-strong)] bg-[var(--color-space-elevated)] font-mono text-xs text-[var(--color-text-secondary)]">
-                ⊙
-              </div>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[var(--color-space-border-strong)] bg-[var(--color-space-elevated)] font-mono text-xs text-[var(--color-text-secondary)]">⊙</div>
             )}
           </div>
         ))}
 
         {loading && (
           <div className="flex justify-start gap-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[var(--color-accent-indigo)] bg-[var(--color-accent-indigo-glow)] font-mono text-xs text-[var(--color-accent-indigo-bright)] animate-pulse">
-              ◈
-            </div>
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-[#6366f1] bg-[rgba(99,102,241,0.12)] font-mono text-xs text-[#818cf8] animate-pulse">◈</div>
             <div className="rounded-lg border border-[var(--color-space-border)] bg-[var(--color-space-navy)] px-4 py-3">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <span className="font-mono text-[11px] text-[var(--color-text-secondary)]">
-                  {activeStep
-                    ? `${PIPELINE_STEPS.find(s => s.id === activeStep)?.label ?? "Processing"}…`
-                    : "Synthesizing…"}
+                  {activeStepIdx >= 0
+                    ? PIPELINE_STEPS[activeStepIdx].label
+                    : "Processing"}…
                 </span>
-                {[0, 150, 300].map(delay => (
-                  <span
-                    key={delay}
-                    className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--color-accent-indigo)]"
-                    style={{ animationDelay: `${delay}ms` }}
-                  />
+                {[0, 150, 300].map(d => (
+                  <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#6366f1]"
+                    style={{ animationDelay: `${d}ms` }} />
                 ))}
               </div>
+              {elapsedMs > 5000 && (
+                <p className="mt-1 font-mono text-[9px] text-[var(--color-text-tertiary)]">
+                  Claude is synthesizing across 185 corpus chunks + graph context…
+                </p>
+              )}
             </div>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
@@ -355,21 +354,21 @@ export default function IntelligencePage() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKey}
-            placeholder="Ask about orbital mechanics, conjunction analysis, spacecraft systems… (Enter to send, Shift+Enter for newline)"
+            placeholder="Ask about orbital mechanics, conjunction analysis, spacecraft systems… (Enter to send)"
             rows={2}
             disabled={loading}
-            className="flex-1 resize-none rounded border border-[var(--color-space-border)] bg-[var(--color-space-surface)] px-3 py-2 font-mono text-[11px] leading-relaxed text-[var(--color-text-primary)] placeholder-[var(--color-text-tertiary)] outline-none focus:border-[var(--color-accent-indigo)] transition-colors disabled:opacity-50"
+            className="flex-1 resize-none rounded border border-[var(--color-space-border)] bg-[var(--color-space-surface)] px-3 py-2 font-mono text-[11px] leading-relaxed text-[var(--color-text-primary)] placeholder-[var(--color-text-tertiary)] outline-none focus:border-[#6366f1] transition-colors disabled:opacity-50"
           />
           <button
             onClick={() => sendQuery(input)}
             disabled={loading || !input.trim()}
-            className="self-end rounded border border-[var(--color-accent-indigo)] bg-[var(--color-accent-indigo-glow)] px-5 py-2 font-mono text-[11px] font-semibold text-[var(--color-accent-indigo-bright)] transition-all hover:bg-[var(--color-accent-indigo)] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="self-end rounded border border-[#6366f1] bg-[rgba(99,102,241,0.12)] px-5 py-2 font-mono text-[11px] font-semibold text-[#818cf8] transition-all hover:bg-[#6366f1] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {loading ? "…" : "Send ⏎"}
+            {loading ? `${formatElapsed(elapsedMs)}` : "Send ⏎"}
           </button>
         </div>
         <p className="mt-1.5 font-mono text-[8px] text-[var(--color-text-tertiary)]">
-          vector retrieval (185 chunks, 12 domains) · knowledge graph (29,248 nodes) · Claude Sonnet 4.6 synthesis · avg 28s
+          Vector retrieval (185 chunks, 12 domains) · Knowledge Graph (29,248 nodes) · Claude Sonnet 4.6 · avg 28s latency
         </p>
       </div>
     </div>
