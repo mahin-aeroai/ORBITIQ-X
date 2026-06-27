@@ -127,20 +127,20 @@ def _get_bridge():
 
                 class _OpenAIPipeline:
                     """
-                    Production RAG pipeline using OpenAI text-embedding-3-large (3072-dim).
-                    Supports document ingestion (ingest_url) and semantic retrieval.
-                    Replaces BGE-M3 which requires GPU/heavy local model.
+                    Production RAG pipeline using sentence-transformers all-MiniLM-L6-v2 (384-dim).
+                    Runs locally — no API quota required. Supports document ingestion and retrieval.
                     """
-                    COLLECTION   = "aerospace_docs"
-                    EMBED_MODEL  = "text-embedding-3-large"
-                    EMBED_DIM    = 3072
-                    CHUNK_SIZE   = 800
+                    COLLECTION    = "aerospace_docs"
+                    EMBED_MODEL   = "all-MiniLM-L6-v2"
+                    EMBED_DIM     = 384
+                    CHUNK_SIZE    = 800
                     CHUNK_OVERLAP = 100
 
                     def __init__(self, qdrant, qdrant_async, openai):
                         self._q   = qdrant
                         self._qa  = qdrant_async
-                        self._oai = openai
+                        self._oai = openai  # kept for answer synthesis via Claude
+                        self._st  = None    # lazy-loaded sentence-transformers model
                         self._ensure_collection()
 
                     def _ensure_collection(self):
@@ -154,11 +154,20 @@ def _get_bridge():
                                 )
                             )
 
+                    def _get_st(self):
+                        if self._st is None:
+                            from sentence_transformers import SentenceTransformer
+                            self._st = SentenceTransformer(self.EMBED_MODEL)
+                        return self._st
+
                     async def _embed(self, texts: list[str]) -> list[list[float]]:
-                        resp = await self._oai.embeddings.create(
-                            model=self.EMBED_MODEL, input=texts
+                        import asyncio
+                        loop = asyncio.get_event_loop()
+                        st = self._get_st()
+                        vecs = await loop.run_in_executor(
+                            None, lambda: st.encode(texts).tolist()
                         )
-                        return [d.embedding for d in resp.data]
+                        return vecs
 
                     def _chunk_text(self, text: str) -> list[str]:
                         words = text.split()
@@ -226,25 +235,31 @@ def _get_bridge():
                             return 0
 
                     async def answer(self, query):
-                        """Vector search + OpenAI synthesis."""
+                        """Vector search with sentence-transformers + Claude synthesis."""
                         try:
                             vecs = await self._embed([query.query])
-                            hits = self._q.search(
+                            hits = self._q.query_points(
                                 collection_name=self.COLLECTION,
-                                query_vector=vecs[0], limit=5
-                            )
+                                query=vecs[0], limit=5
+                            ).points
                             if not hits:
                                 return None
-                            context = "\n\n".join(h.payload.get("text","") for h in hits)
-                            resp = await self._oai.chat.completions.create(
-                                model="gpt-4o-mini",
-                                messages=[
-                                    {"role":"system","content":"You are an aerospace technical assistant. Answer based on the provided context."},
-                                    {"role":"user","content":f"Context:\n{context}\n\nQuestion: {query.query}"},
-                                ],
-                                max_tokens=1024
+                            context = "\n\n".join(
+                                f"[{h.payload.get('title','')}]\n{h.payload.get('text','')}"
+                                for h in hits
                             )
-                            return resp.choices[0].message.content
+                            from anthropic import AsyncAnthropic
+                            from app.core.config import get_settings
+                            _s = get_settings()
+                            anthropic = AsyncAnthropic(
+                                api_key=_s.ANTHROPIC_API_KEY.get_secret_value()
+                            )
+                            resp = await anthropic.messages.create(
+                                model="claude-sonnet-4-6",
+                                max_tokens=1024,
+                                messages=[{"role":"user","content":f"You are an aerospace technical assistant. Answer based on context.\n\nContext:\n{context}\n\nQuestion: {query.query}"}]
+                            )
+                            return resp.content[0].text
                         except Exception as exc:
                             logger.warning("rag_answer_failed error=%s", exc)
                             return None
