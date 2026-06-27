@@ -90,6 +90,7 @@ class ChunkMetadata:
     authors:          list[str]       = field(default_factory=list)
     page_start:       Optional[int]   = None
     page_end:         Optional[int]   = None
+    report_number:    Optional[str]   = None
 
 
 @dataclass
