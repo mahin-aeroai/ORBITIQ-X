@@ -96,3 +96,40 @@ First production release. Full-stack aerospace intelligence platform deployed on
 ## Repository
 
 GitHub: https://github.com/mahin-aeroai/ORBITIQ-X
+
+---
+
+## Phase 16A — Neo4j Knowledge Graph — OPERATIONAL (2026-06-27)
+
+### Production Metrics (measured live)
+
+| Metric | Value |
+|---|---|
+| Neo4j Aura instance | `bff8c462.databases.neo4j.io` |
+| Total nodes | 29,248 |
+| Satellite nodes | 29,198 |
+| Reference nodes | 50 (OrbitalRegime×9, Agency×14, LaunchVehicle×15, LaunchSite×12) |
+| Total relationships | 29,198 |
+| Relationship type | ORBITS (Satellite→OrbitalRegime) |
+| LEO satellites | 25,285 |
+| MEO satellites | 1,665 |
+| GEO satellites | 1,535 |
+| HEO satellites | 713 |
+| KG health latency | ~610ms warm |
+| Neo4j status | healthy |
+| PostgreSQL status | healthy |
+| Scheduler status | running |
+| Platform overall | degraded (Redis unavailable — config task) |
+
+### Configuration Defects Resolved During Activation
+
+| Defect | Root Cause | Fix |
+|---|---|---|
+| `NEO4J_URI` ignored env var | `@property` always returned `bolt://localhost:7687` | Added `os.environ.get("NEO4J_URI")` check |
+| `NEO4J_DATABASE` wrong default | Defaulted to `"orbitiq"` — Aura uses instance ID | Changed to `"bff8c462"` |
+| `NEO4J_USER` not injecting | Railway env var not propagating to Pydantic field | Hardcoded default `"bff8c462"` |
+| Indentation error | GitHub web edit introduced extra space on `def` line | Fixed via local push |
+| Satellites table empty | Deployed code missing `53cc3c9` satellite upsert fix | Populated directly from TLE records via SQL |
+| No ORBITS relationships | `regime` property missing; OrbitalRegime matched on `name` not `orbitId` | Set regime from orbital params; matched on `orbitId` |
+
+### Phase 16B Readiness: GO
