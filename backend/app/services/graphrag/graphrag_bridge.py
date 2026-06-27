@@ -56,12 +56,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 # Add knowledge-graph to path for the existing GraphRAG retriever
-# Use /app as the base when running in Railway container (parents[5] exceeds depth)
-import os as _os
-_APP_ROOT = pathlib.Path(_os.environ.get("RAILWAY_VOLUME_MOUNT_PATH", "/app")).parent
-_ALT_ROOT = pathlib.Path(__file__).parents[4]  # /app when file is at /app/app/services/graphrag/
-_KG_ROOT  = (_ALT_ROOT / "knowledge-graph") if (_ALT_ROOT / "knowledge-graph").exists() else (_APP_ROOT / "knowledge-graph")
-_RAG_ROOT = (_ALT_ROOT / "rag") if (_ALT_ROOT / "rag").exists() else (_APP_ROOT / "rag")
+# Container layout: /app/app/services/graphrag/graphrag_bridge.py
+# parents[3] = /app  (contains rag/ and knowledge-graph/)
+_APP_DIR  = pathlib.Path(__file__).parents[3]
+_KG_ROOT  = _APP_DIR / "knowledge-graph"
+_RAG_ROOT = _APP_DIR / "rag"
 for _p in [str(_KG_ROOT), str(_RAG_ROOT)]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
