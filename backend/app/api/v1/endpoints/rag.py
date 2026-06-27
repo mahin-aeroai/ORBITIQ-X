@@ -115,21 +115,33 @@ def _get_bridge():
             qdrant_url = s.QDRANT_URL
             qdrant_key = s.QDRANT_API_KEY.get_secret_value()
             if qdrant_url:
-                # rag/ module lives alongside backend/
-                rag_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "rag", "src")
-                rag_path = os.path.normpath(rag_path)
-                if rag_path not in sys.path:
-                    sys.path.insert(0, rag_path)
-                from pipeline import AerospaceRAGPipeline
-                from store.qdrant_store import AerospaceQdrantStore
+                # rag/src must be imported as a package (uses relative imports).
+                # Add the parent of rag/src (i.e. /app/rag) to sys.path so that
+                # `import src.pipeline` works with relative imports intact.
+                rag_parent = os.path.normpath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "rag")
+                )
+                if rag_parent not in sys.path:
+                    sys.path.insert(0, rag_parent)
+                from src.store.qdrant_store import AerospaceQdrantStore
+                from src.pipeline import AerospaceRAGPipeline
                 from urllib.parse import urlparse
                 parsed = urlparse(qdrant_url)
-                store = AerospaceQdrantStore(
-                    host=parsed.hostname,
-                    port=parsed.port or 443,
-                    api_key=qdrant_key or None,
+                pipeline = AerospaceRAGPipeline(
+                    qdrant_host=parsed.hostname,
+                    qdrant_port=parsed.port or 443,
+                    anthropic_api_key=s.ANTHROPIC_API_KEY.get_secret_value(),
                 )
-                pipeline = AerospaceRAGPipeline(store=store)
+                # Patch the store's api_key since AerospaceQdrantStore
+                # constructor doesn't accept api_key via AerospaceRAGPipeline
+                if qdrant_key:
+                    from qdrant_client import QdrantClient, AsyncQdrantClient
+                    pipeline.store.client = QdrantClient(
+                        host=parsed.hostname, port=parsed.port or 443, api_key=qdrant_key
+                    )
+                    pipeline.store.async_client = AsyncQdrantClient(
+                        host=parsed.hostname, port=parsed.port or 443, api_key=qdrant_key
+                    )
                 _bridge.set_pipeline(pipeline)
                 logger.info("qdrant_pipeline_initialized url=%s", qdrant_url)
         except Exception as exc:
