@@ -312,6 +312,11 @@ def _get_bridge():
                             except Exception:
                                 return None
 
+
+                pipeline = _OpenAIPipeline(qdrant_client, qdrant_async, openai_client)
+                _bridge.set_pipeline(pipeline)
+                _get_corpus().set_pipeline(pipeline)
+
                 logger.info("qdrant_openai_pipeline_initialized url=%s", qdrant_url)
         except Exception as exc:
             logger.warning("qdrant_pipeline_init_failed error=%s", exc)
