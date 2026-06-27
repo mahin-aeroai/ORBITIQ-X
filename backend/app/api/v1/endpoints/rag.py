@@ -115,33 +115,149 @@ def _get_bridge():
             qdrant_url = s.QDRANT_URL
             qdrant_key = s.QDRANT_API_KEY.get_secret_value()
             if qdrant_url:
-                from qdrant_client import QdrantClient
-                from urllib.parse import urlparse
-                parsed = urlparse(qdrant_url)
+                from qdrant_client import QdrantClient, AsyncQdrantClient
+                from openai import AsyncOpenAI
 
-                # Use lightweight direct Qdrant client — avoids loading
-                # the heavy BGE-M3 embedding model at startup.
-                # The _pipeline attribute on GraphRAGBridge only needs to
-                # be truthy for the health check; actual vector search uses
-                # the client directly when documents are ingested.
-                class _LightQdrantPipeline:
-                    """Minimal pipeline wrapper — Qdrant connected, no local embedder."""
-                    def __init__(self, client, url):
-                        self._client = client
-                        self._url = url
+                qdrant_client      = QdrantClient(url=qdrant_url, api_key=qdrant_key or None)
+                qdrant_async       = AsyncQdrantClient(url=qdrant_url, api_key=qdrant_key or None)
+                openai_client      = AsyncOpenAI(api_key=s.OPENAI_API_KEY.get_secret_value())
+
+                # Verify Qdrant connectivity
+                qdrant_client.get_collections()
+
+                class _OpenAIPipeline:
+                    """
+                    Production RAG pipeline using OpenAI text-embedding-3-large (3072-dim).
+                    Supports document ingestion (ingest_url) and semantic retrieval.
+                    Replaces BGE-M3 which requires GPU/heavy local model.
+                    """
+                    COLLECTION   = "aerospace_docs"
+                    EMBED_MODEL  = "text-embedding-3-large"
+                    EMBED_DIM    = 3072
+                    CHUNK_SIZE   = 800
+                    CHUNK_OVERLAP = 100
+
+                    def __init__(self, qdrant, qdrant_async, openai):
+                        self._q   = qdrant
+                        self._qa  = qdrant_async
+                        self._oai = openai
+                        self._ensure_collection()
+
+                    def _ensure_collection(self):
+                        from qdrant_client.models import Distance, VectorParams
+                        existing = [c.name for c in self._q.get_collections().collections]
+                        if self.COLLECTION not in existing:
+                            self._q.create_collection(
+                                self.COLLECTION,
+                                vectors_config=VectorParams(
+                                    size=self.EMBED_DIM, distance=Distance.COSINE
+                                )
+                            )
+
+                    async def _embed(self, texts: list[str]) -> list[list[float]]:
+                        resp = await self._oai.embeddings.create(
+                            model=self.EMBED_MODEL, input=texts
+                        )
+                        return [d.embedding for d in resp.data]
+
+                    def _chunk_text(self, text: str) -> list[str]:
+                        words = text.split()
+                        chunks, i = [], 0
+                        while i < len(words):
+                            chunk = " ".join(words[i:i + self.CHUNK_SIZE])
+                            chunks.append(chunk)
+                            i += self.CHUNK_SIZE - self.CHUNK_OVERLAP
+                        return [c for c in chunks if len(c.strip()) > 50]
+
+                    async def ingest_url(self, url: str, metadata=None) -> int:
+                        """Download URL, chunk, embed with OpenAI, upsert to Qdrant."""
+                        import httpx, uuid
+                        from qdrant_client.models import PointStruct
+                        try:
+                            async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+                                r = await client.get(url)
+                                r.raise_for_status()
+                                content_type = r.headers.get("content-type", "")
+                                raw = r.content
+
+                            # Extract text
+                            if "pdf" in content_type or url.endswith(".pdf"):
+                                try:
+                                    import io
+                                    import pypdf
+                                    reader = pypdf.PdfReader(io.BytesIO(raw))
+                                    text = " ".join(p.extract_text() or "" for p in reader.pages)
+                                except Exception:
+                                    text = raw.decode("utf-8", errors="ignore")
+                            else:
+                                from html.parser import HTMLParser
+                                class _P(HTMLParser):
+                                    def __init__(self): super().__init__(); self.parts=[]
+                                    def handle_data(self, d): self.parts.append(d)
+                                p = _P(); p.feed(raw.decode("utf-8", errors="ignore"))
+                                text = " ".join(p.parts)
+
+                            chunks = self._chunk_text(text)
+                            if not chunks:
+                                return 0
+
+                            # Embed in batches of 20
+                            points, batch_size = [], 20
+                            for i in range(0, len(chunks), batch_size):
+                                batch = chunks[i:i+batch_size]
+                                vectors = await self._embed(batch)
+                                for j, (chunk, vec) in enumerate(zip(batch, vectors)):
+                                    points.append(PointStruct(
+                                        id=str(uuid.uuid4()),
+                                        vector=vec,
+                                        payload={
+                                            "text": chunk, "url": url,
+                                            "chunk_index": i+j,
+                                            "title": (metadata.title if metadata else url.split("/")[-1]),
+                                        }
+                                    ))
+
+                            # Upsert to Qdrant
+                            self._q.upsert(collection_name=self.COLLECTION, points=points)
+                            logger.info("corpus_ingest_complete url=%s chunks=%d", url, len(points))
+                            return len(points)
+                        except Exception as exc:
+                            logger.warning("corpus_ingest_failed url=%s error=%s", url, exc)
+                            return 0
+
                     async def answer(self, query):
-                        return None  # graph-only fallback
+                        """Vector search + OpenAI synthesis."""
+                        try:
+                            vecs = await self._embed([query.query])
+                            hits = self._q.search(
+                                collection_name=self.COLLECTION,
+                                query_vector=vecs[0], limit=5
+                            )
+                            if not hits:
+                                return None
+                            context = "\n\n".join(h.payload.get("text","") for h in hits)
+                            resp = await self._oai.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[
+                                    {"role":"system","content":"You are an aerospace technical assistant. Answer based on the provided context."},
+                                    {"role":"user","content":f"Context:\n{context}\n\nQuestion: {query.query}"},
+                                ],
+                                max_tokens=1024
+                            )
+                            return resp.choices[0].message.content
+                        except Exception as exc:
+                            logger.warning("rag_answer_failed error=%s", exc)
+                            return None
 
-                client = QdrantClient(
-                    url=qdrant_url,
-                    api_key=qdrant_key or None,
-                )
-                # Verify connectivity
-                client.get_collections()
-
-                pipeline = _LightQdrantPipeline(client, qdrant_url)
+                pipeline = _OpenAIPipeline(qdrant_client, qdrant_async, openai_client)
                 _bridge.set_pipeline(pipeline)
-                logger.info("qdrant_connected url=%s", qdrant_url)
+
+                # Wire pipeline into corpus service for document ingestion.
+                # _corpus may be None here (lazy init) — set it now so
+                # ingest-all calls will use the OpenAI pipeline.
+                _get_corpus().set_pipeline(pipeline)
+
+                logger.info("qdrant_openai_pipeline_initialized url=%s", qdrant_url)
         except Exception as exc:
             logger.warning("qdrant_pipeline_init_failed error=%s", exc)
 
