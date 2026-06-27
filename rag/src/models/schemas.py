@@ -28,16 +28,25 @@ class DocumentType(str, Enum):
     JOURNAL_ARTICLE   = "journal_article"
     CONFERENCE_PAPER  = "conference_paper"
     STANDARD          = "standard"
+    STANDARDS_DOC     = "standards_doc"
     HANDBOOK          = "handbook"
+    RESEARCH_PAPER    = "research_paper"
+    MISSION_REPORT    = "mission_report"
+    OPERATOR_MANUAL   = "operator_manual"
+    TEXTBOOK          = "textbook"
+    DEBRIS_STUDY      = "debris_study"
+    UNKNOWN           = "unknown"
     OTHER             = "other"
 
 
 class ContentType(str, Enum):
-    TEXT      = "text"
-    TABLE     = "table"
-    EQUATION  = "equation"
-    FIGURE    = "figure"
-    CODE      = "code"
+    TEXT       = "text"
+    TABLE      = "table"
+    EQUATION   = "equation"
+    FIGURE     = "figure"
+    CODE       = "code"
+    ABSTRACT   = "abstract"
+    CONCLUSION = "conclusion"
 
 
 class SearchMode(str, Enum):
