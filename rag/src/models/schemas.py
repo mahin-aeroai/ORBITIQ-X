@@ -65,6 +65,7 @@ class DocumentMetadata:
     publication_year: Optional[int]   = None
     source_url:       Optional[str]   = None
     doc_id:           Optional[str]   = None
+    report_number:    Optional[str]   = None
     topic_tags:       list[str]       = field(default_factory=list)
     peer_reviewed:    bool            = False
     has_equations:    bool            = False
