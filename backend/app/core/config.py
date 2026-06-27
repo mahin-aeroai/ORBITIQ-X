@@ -116,7 +116,7 @@ class Settings(BaseSettings):
     NEO4J_DATABASE: str = "bff8c462"
 
     @property
-     def NEO4J_URI(self) -> str:
+    def NEO4J_URI(self) -> str:
         import os as _os
         env_uri = _os.environ.get("NEO4J_URI", "")
         if env_uri:
