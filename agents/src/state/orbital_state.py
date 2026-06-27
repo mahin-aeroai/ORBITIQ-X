@@ -115,12 +115,15 @@ class OrbitalState(TypedDict):
     """Full LangGraph state shared across all agents."""
 
     # ── Immutable inputs ──────────────────────────────────────
-    session_id: str
-    user_query: str
-    query_intent: Optional[str]       # classified by supervisor
-    query_entities: list[str]         # NORAD IDs, mission names, etc.
-    conversation_history: list[dict]  # multi-turn messages
-    requested_agents: list[str]       # which agents supervisor will invoke
+    # session_id is written once by supervisor and read-only by agents.
+    # Annotated with last-write-wins to avoid InvalidUpdateError when
+    # agents run in parallel and all emit the same session_id value.
+    session_id: Annotated[str, lambda a, b: b]
+    user_query: Annotated[str, lambda a, b: b]
+    query_intent: Annotated[Optional[str], lambda a, b: b if b is not None else a]
+    query_entities: Annotated[list[str], lambda a, b: b if b else a]
+    conversation_history: Annotated[list[dict], lambda a, b: b if b else a]
+    requested_agents: Annotated[list[str], lambda a, b: b if b else a]
 
     # ── Supervisor fields ─────────────────────────────────────
     routing_decision: Optional[dict]  # {agent: reason}
