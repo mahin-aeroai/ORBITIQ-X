@@ -178,15 +178,15 @@ class OrbitalState(TypedDict):
     satellite_health: Annotated[list[dict], _merge_list]
 
     # ── Safety and monitoring ─────────────────────────────────
-    safety_approved: bool
+    safety_approved: Annotated[bool, lambda a, b: a and b]
     safety_flags: Annotated[list[str], _merge_list]
     safety_override_reason: Annotated[Optional[str], lambda a, b: b if b is not None else a]
     agent_call_log: Annotated[list[AgentCallRecord], _merge_list]
     errors: Annotated[list[dict], _merge_list]
 
     # ── Timing and metadata ───────────────────────────────────
-    started_at: str
-    completed_at: Optional[str]
+    started_at: Annotated[str, lambda a, b: a or b]
+    completed_at: Annotated[Optional[str], lambda a, b: b if b is not None else a]
     total_latency_ms: Annotated[Optional[float], lambda a, b: b if b is not None else a]
     tokens_total: Annotated[int, lambda a, b: a + b]
     graph_iteration: Annotated[int, lambda a, b: max(a, b)]
