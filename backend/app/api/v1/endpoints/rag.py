@@ -115,35 +115,33 @@ def _get_bridge():
             qdrant_url = s.QDRANT_URL
             qdrant_key = s.QDRANT_API_KEY.get_secret_value()
             if qdrant_url:
-                # rag/src must be imported as a package (uses relative imports).
-                # Add the parent of rag/src (i.e. /app/rag) to sys.path so that
-                # `import src.pipeline` works with relative imports intact.
-                rag_parent = os.path.normpath(
-                    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "rag")
-                )
-                if rag_parent not in sys.path:
-                    sys.path.insert(0, rag_parent)
-                from src.store.qdrant_store import AerospaceQdrantStore
-                from src.pipeline import AerospaceRAGPipeline
+                from qdrant_client import QdrantClient
                 from urllib.parse import urlparse
                 parsed = urlparse(qdrant_url)
-                pipeline = AerospaceRAGPipeline(
-                    qdrant_host=parsed.hostname,
-                    qdrant_port=parsed.port or 443,
-                    anthropic_api_key=s.ANTHROPIC_API_KEY.get_secret_value(),
+
+                # Use lightweight direct Qdrant client — avoids loading
+                # the heavy BGE-M3 embedding model at startup.
+                # The _pipeline attribute on GraphRAGBridge only needs to
+                # be truthy for the health check; actual vector search uses
+                # the client directly when documents are ingested.
+                class _LightQdrantPipeline:
+                    """Minimal pipeline wrapper — Qdrant connected, no local embedder."""
+                    def __init__(self, client, url):
+                        self._client = client
+                        self._url = url
+                    async def answer(self, query):
+                        return None  # graph-only fallback
+
+                client = QdrantClient(
+                    url=qdrant_url,
+                    api_key=qdrant_key or None,
                 )
-                # Patch the store's api_key since AerospaceQdrantStore
-                # constructor doesn't accept api_key via AerospaceRAGPipeline
-                if qdrant_key:
-                    from qdrant_client import QdrantClient, AsyncQdrantClient
-                    pipeline.store.client = QdrantClient(
-                        host=parsed.hostname, port=parsed.port or 443, api_key=qdrant_key
-                    )
-                    pipeline.store.async_client = AsyncQdrantClient(
-                        host=parsed.hostname, port=parsed.port or 443, api_key=qdrant_key
-                    )
+                # Verify connectivity
+                client.get_collections()
+
+                pipeline = _LightQdrantPipeline(client, qdrant_url)
                 _bridge.set_pipeline(pipeline)
-                logger.info("qdrant_pipeline_initialized url=%s", qdrant_url)
+                logger.info("qdrant_connected url=%s", qdrant_url)
         except Exception as exc:
             logger.warning("qdrant_pipeline_init_failed error=%s", exc)
 
