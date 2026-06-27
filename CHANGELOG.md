@@ -133,3 +133,53 @@ GitHub: https://github.com/mahin-aeroai/ORBITIQ-X
 | No ORBITS relationships | `regime` property missing; OrbitalRegime matched on `name` not `orbitId` | Set regime from orbital params; matched on `orbitId` |
 
 ### Phase 16B Readiness: GO
+
+---
+
+## Phase 16B — GraphRAG (Qdrant Vector Store) — OPERATIONAL (2026-06-27)
+
+### Production Metrics (measured live)
+
+| Metric | Value |
+|---|---|
+| Qdrant cluster | `2435500e-5c7d-4182-b1ad-c3f0ca35a8a0.us-west-1-0.aws.cloud.qdrant.io` |
+| Collection | `aerospace_docs` |
+| RAG mode | `full_graphrag` |
+| RAG overall | healthy |
+| Neo4j nodes | 29,248 |
+| Qdrant available | true |
+| Vector store status | healthy |
+| GraphRAG status | healthy |
+| Live query latency | ~9–11 seconds (graph retrieval + Claude synthesis) |
+| Sample answer | "25,285 total tracked objects in LEO" — correct from live graph |
+
+### Defects Resolved During Phase 16B Activation
+
+| Defect | Fix | Commit |
+|---|---|---|
+| `qdrant-client` not in requirements | Added `qdrant-client==1.14.3` | `b1f2214` |
+| `rag/` not in Docker image | Added `COPY rag/ /app/rag/` to Dockerfile | `fdddbed` |
+| `rag/src` relative imports fail | Added `rag/` (not `rag/src/`) to sys.path | `b6f4353` |
+| `models/schemas.py` missing | Created with all 13 required types | `a2f3a14` |
+| `CNSA` missing from AgencyType | Added enum value | `d748d28` |
+| `MISSION_REPORT` etc missing from DocumentType | Added 7 missing values | `df0199f` |
+| `chunking/loaders.py` missing | Created stub re-exporting from ingestion | `760775e` |
+| `AerospaceRAGPipeline` wrong constructor | Fixed from `store=` to `qdrant_host=` | `b6f4353` |
+| `graphrag_bridge.py` `parents[5]` IndexError | Changed to `parents[3]` | `e8be7cf` |
+| `connection.py` `parents[4]` wrong | Changed to `parents[3]` | `ae6b78f` |
+| BGE-M3 embedder blocks startup | Replaced with lightweight Qdrant-only pipeline | `01a9c03` |
+| Analytics uses wrong relationship names | Added direct Cypher fallback with `ORBITS` | `8be46e4` |
+| `NEO4J_USER` env var not injecting | Hardcoded default `bff8c462` | `e3b385e` |
+
+### Platform Status After Phase 16B
+
+```
+RAG health:    overall=healthy  mode=full_graphrag
+neo4j:         healthy  node_count=29248
+qdrant:        available=true
+anthropic:     configured  model=claude-sonnet-4-6
+vector_store:  healthy
+graphrag:      healthy
+postgres:      healthy
+scheduler:     running
+```
