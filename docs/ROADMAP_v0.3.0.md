@@ -68,22 +68,11 @@ POST /api/v1/rag/corpus/ingest-all
 
 ---
 
-## Priority 4 — SATCAT Enrichment
+## Priority 4 — Benchmark Suite
 
-Current satellite nodes have `objectType = 'unknown'` because TLE data carries no operator metadata.
-Space-Track SATCAT API provides: country code, launch date, object type, RCS size.
-
-**Implementation:**
-1. Extend `catalog_sync_service.py` to fetch SATCAT data alongside TLE data
-2. Add `operator_name`, `country_code`, `launch_year`, `object_type_satcat` to `satellites` table
-3. Graph population service creates `Operator` nodes and `OPERATED_BY` relationships
-4. Analytics endpoints (`/analytics/operators`) become functional
-
-**Effect:** Top operators by satellite count, country-level intelligence, constellation mapping
-
----
-
-## Priority 5 — Benchmark Suite
+**Run only after corpus ingestion is complete** — benchmarking against an empty
+Qdrant collection measures graph-only mode, not full GraphRAG capability.
+The first result becomes the authoritative v0.3.0 baseline.
 
 Run the Foundation Model benchmark against the 17 configured tasks:
 
@@ -99,6 +88,21 @@ POST /api/v1/foundation/benchmark  {"model_id": "orbitiq-graphrag-v1", "dry_run"
 - End-to-end response time per tier
 
 **Establishes:** v0.3.0 performance baseline for regression detection
+
+---
+
+## Priority 5 — SATCAT Enrichment
+
+Current satellite nodes have `objectType = 'unknown'` because TLE data carries no operator metadata.
+Space-Track SATCAT API provides: country code, launch date, object type, RCS size.
+
+**Implementation:**
+1. Extend `catalog_sync_service.py` to fetch SATCAT data alongside TLE data
+2. Add `operator_name`, `country_code`, `launch_year`, `object_type_satcat` to `satellites` table
+3. Graph population service creates `Operator` nodes and `OPERATED_BY` relationships
+4. Analytics endpoints (`/analytics/operators`) become functional
+
+**Effect:** Top operators by satellite count, country-level intelligence, constellation mapping
 
 ---
 
