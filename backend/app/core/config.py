@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     # ─── Neo4j ────────────────────────────────────────────────────────────────
     NEO4J_HOST: str = "localhost"
     NEO4J_BOLT_PORT: int = 7687
-    NEO4J_USER: str = "neo4j"
+    NEO4J_USER: str = "bff8c462"
     NEO4J_PASSWORD: SecretStr = Field(default="not-configured")
     NEO4J_DATABASE: str = "bff8c462"
 
