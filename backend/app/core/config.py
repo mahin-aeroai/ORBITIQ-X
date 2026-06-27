@@ -123,6 +123,11 @@ class Settings(BaseSettings):
             return env_uri
         return f"bolt://{self.NEO4J_HOST}:{self.NEO4J_BOLT_PORT}"
 
+    # ─── Qdrant ───────────────────────────────────────────────────────────────
+    QDRANT_URL: str = ""          # e.g. https://xxxx.us-east4-0.gcp.cloud.qdrant.io
+    QDRANT_API_KEY: SecretStr = SecretStr("")
+    QDRANT_COLLECTION: str = "aerospace_docs"
+
     # ─── Weaviate ─────────────────────────────────────────────────────────────
     WEAVIATE_HOST: str = "localhost"
     WEAVIATE_PORT: int = 8080

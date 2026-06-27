@@ -95,6 +95,7 @@ def _get_bridge():
     if _bridge is None:
         from app.services.graphrag.graphrag_bridge import GraphRAGBridge
         _bridge = GraphRAGBridge()
+
         # Inject Anthropic client if configured
         try:
             from anthropic import AsyncAnthropic
@@ -105,6 +106,35 @@ def _get_bridge():
             )
         except Exception as exc:
             logger.warning("anthropic_client_init_failed error=%s", exc)
+
+        # Inject Qdrant RAG pipeline if configured
+        try:
+            from app.core.config import get_settings
+            import sys, os
+            s = get_settings()
+            qdrant_url = s.QDRANT_URL
+            qdrant_key = s.QDRANT_API_KEY.get_secret_value()
+            if qdrant_url:
+                # rag/ module lives alongside backend/
+                rag_path = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "rag", "src")
+                rag_path = os.path.normpath(rag_path)
+                if rag_path not in sys.path:
+                    sys.path.insert(0, rag_path)
+                from pipeline import AerospaceRAGPipeline
+                from store.qdrant_store import AerospaceQdrantStore
+                from urllib.parse import urlparse
+                parsed = urlparse(qdrant_url)
+                store = AerospaceQdrantStore(
+                    host=parsed.hostname,
+                    port=parsed.port or 443,
+                    api_key=qdrant_key or None,
+                )
+                pipeline = AerospaceRAGPipeline(store=store)
+                _bridge.set_pipeline(pipeline)
+                logger.info("qdrant_pipeline_initialized url=%s", qdrant_url)
+        except Exception as exc:
+            logger.warning("qdrant_pipeline_init_failed error=%s", exc)
+
     return _bridge
 
 
