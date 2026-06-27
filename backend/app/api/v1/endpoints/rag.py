@@ -694,6 +694,12 @@ async def ingest_all_corpus(
 
 async def _background_ingest_all(priority_filter: int, agency_filter: str | None):
     corpus = _get_corpus()
+    # Ensure the pipeline is wired — _get_bridge() initialises the OpenAI
+    # pipeline and calls corpus.set_pipeline(). Call it here explicitly so
+    # ingestion works even if no RAG query has been made yet.
+    bridge = _get_bridge()
+    if bridge._pipeline is not None and corpus._pipeline is None:
+        corpus.set_pipeline(bridge._pipeline)
     results = await corpus.ingest_all(
         priority_filter=priority_filter,
         agency_filter=agency_filter,
