@@ -355,8 +355,9 @@ async def init_schema() -> None:
         driver = get_driver()
 
         import pathlib
+        # Container: /app/app/graph/connection.py → parents[3] = /app
         schema_dir = (
-            pathlib.Path(__file__).parents[4]
+            pathlib.Path(__file__).parents[3]
             / "knowledge-graph" / "schema"
         )
         if not schema_dir.exists():
