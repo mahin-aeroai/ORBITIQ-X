@@ -235,42 +235,82 @@ def _get_bridge():
                             return 0
 
                     async def answer(self, query):
-                        """Vector search with sentence-transformers + Claude synthesis."""
+                        """Vector search with ST retrieval. Returns RAGResponse for bridge compatibility."""
+                        import sys as _sys, time as _time
+                        _sys.path.insert(0, "/app/rag")
                         try:
+                            from src.models.schemas import (
+                                RAGResponse, RetrievedChunk, CitationRecord,
+                                ChunkMetadata, AgencyType, DocumentType, ContentType,
+                            )
+                            t0 = _time.perf_counter()
                             vecs = await self._embed([query.query])
                             hits = self._q.query_points(
                                 collection_name=self.COLLECTION,
-                                query=vecs[0], limit=5
+                                query=vecs[0], limit=query.top_k
                             ).points
+                            latency_ms = round((_time.perf_counter() - t0) * 1000, 1)
+
                             if not hits:
-                                return None
+                                return RAGResponse(
+                                    query=query.query, answer="",
+                                    confidence=0.0, chunks_retrieved=0,
+                                    latency_ms=latency_ms,
+                                )
+
+                            # Build RetrievedChunk objects
+                            retrieved = []
+                            for i, h in enumerate(hits):
+                                meta = ChunkMetadata(
+                                    doc_id=h.payload.get("chunk_id", f"chunk-{i}"),
+                                    chunk_index=i,
+                                    section_title=h.payload.get("title", ""),
+                                    doc_title=h.payload.get("title", ""),
+                                    source_url=h.payload.get("url", ""),
+                                )
+                                retrieved.append(RetrievedChunk(
+                                    chunk_id=h.payload.get("chunk_id", f"chunk-{i}"),
+                                    text=h.payload.get("text", ""),
+                                    metadata=meta,
+                                    final_score=h.score,
+                                    citation_key=f"[{i+1}]",
+                                ))
+
                             context = "\n\n".join(
-                                f"[{h.payload.get('title','')}]\n{h.payload.get('text','')}"
-                                for h in hits
+                                f"[{r.metadata.section_title}]\n{r.text}"
+                                for r in retrieved
                             )
-                            from anthropic import AsyncAnthropic
-                            from app.core.config import get_settings
-                            _s = get_settings()
-                            anthropic = AsyncAnthropic(
-                                api_key=_s.ANTHROPIC_API_KEY.get_secret_value()
+
+                            citations = [
+                                CitationRecord(
+                                    citation_key=r.citation_key,
+                                    doc_title=r.metadata.section_title,
+                                    chunk_id=r.chunk_id,
+                                    relevance_score=r.final_score,
+                                    excerpt=r.text[:120],
+                                )
+                                for r in retrieved
+                            ]
+
+                            return RAGResponse(
+                                query=query.query,
+                                answer=context,          # bridge uses .answer as doc context
+                                confidence=hits[0].score if hits else 0.0,
+                                sources=citations,
+                                retrieved_chunks=retrieved,
+                                chunks_retrieved=len(retrieved),
+                                latency_ms=latency_ms,
+                                search_mode_used="dense",
                             )
-                            resp = await anthropic.messages.create(
-                                model="claude-sonnet-4-6",
-                                max_tokens=1024,
-                                messages=[{"role":"user","content":f"You are an aerospace technical assistant. Answer based on context.\n\nContext:\n{context}\n\nQuestion: {query.query}"}]
-                            )
-                            return resp.content[0].text
                         except Exception as exc:
                             logger.warning("rag_answer_failed error=%s", exc)
-                            return None
-
-                pipeline = _OpenAIPipeline(qdrant_client, qdrant_async, openai_client)
-                _bridge.set_pipeline(pipeline)
-
-                # Wire pipeline into corpus service for document ingestion.
-                # _corpus may be None here (lazy init) — set it now so
-                # ingest-all calls will use the OpenAI pipeline.
-                _get_corpus().set_pipeline(pipeline)
+                            import sys as _sys2
+                            _sys2.path.insert(0, "/app/rag")
+                            try:
+                                from src.models.schemas import RAGResponse
+                                return RAGResponse(query=query.query, answer="", confidence=0.0)
+                            except Exception:
+                                return None
 
                 logger.info("qdrant_openai_pipeline_initialized url=%s", qdrant_url)
         except Exception as exc:
