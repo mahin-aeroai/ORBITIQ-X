@@ -86,6 +86,7 @@ datasets/catalogs/*.csv
 models/
 !backend/app/digital_twin/models/
 !backend/app/**/models/
+!rag/src/models/
 checkpoints/
 runs/
 mlruns/
