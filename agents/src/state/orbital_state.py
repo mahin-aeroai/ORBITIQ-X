@@ -41,8 +41,8 @@ def _keep_last(a: Any, b: Any) -> Any:
 
 class AgentCallRecord(TypedDict):
     agent_name: str
-    started_at: str
-    completed_at: Optional[str]
+    started_at: Annotated[str, lambda a, b: a or b]
+    completed_at: Annotated[Optional[str], lambda a, b: b if b is not None else a]
     success: bool
     error: Optional[str]
     tokens_used: int
@@ -73,7 +73,7 @@ class ManeuverRecommendation(TypedDict):
     fuel_cost_kg: float
     confidence: float
     rationale: str
-    safety_approved: bool
+    safety_approved: Annotated[bool, lambda a, b: a and b]
 
 
 class ReentryAlert(TypedDict):
@@ -126,10 +126,10 @@ class OrbitalState(TypedDict):
     requested_agents: Annotated[list[str], lambda a, b: b if b else a]
 
     # ── Supervisor fields ─────────────────────────────────────
-    routing_decision: Optional[dict]  # {agent: reason}
-    final_answer: Optional[str]
-    final_confidence: Optional[float]
-    synthesis_complete: bool
+    routing_decision: Annotated[Optional[dict], lambda a, b: b if b is not None else a]
+    final_answer: Annotated[Optional[str], lambda a, b: b if b is not None else a]
+    final_confidence: Annotated[Optional[float], lambda a, b: b if b is not None else a]
+    synthesis_complete: Annotated[bool, lambda a, b: a or b]
 
     # ── Orbital Dynamics Agent output ─────────────────────────
     orbital_propagations: Annotated[list[dict], _merge_list]
@@ -141,7 +141,7 @@ class OrbitalState(TypedDict):
     # ── Conjunction Analysis Agent output ─────────────────────
     conjunction_alerts: Annotated[list[ConjunctionAlert], _merge_list]
     maneuver_recommendations: Annotated[list[ManeuverRecommendation], _merge_list]
-    collision_risk_summary: Optional[str]
+    collision_risk_summary: Annotated[Optional[str], lambda a, b: b if b is not None else a]
     high_risk_objects: Annotated[list[int], _merge_list]  # NORAD IDs
 
     # ── Space Debris Agent output ─────────────────────────────
@@ -152,44 +152,44 @@ class OrbitalState(TypedDict):
 
     # ── Mission Planning Agent output ─────────────────────────
     mission_windows: Annotated[list[dict], _merge_list]
-    delta_v_budget: Optional[dict]
+    delta_v_budget: Annotated[Optional[dict], lambda a, b: b if b is not None else a]
     trajectory_options: Annotated[list[dict], _merge_list]
     launch_opportunities: Annotated[list[dict], _merge_list]
-    mission_timeline: Optional[dict]
+    mission_timeline: Annotated[Optional[dict], lambda a, b: b if b is not None else a]
 
     # ── Space Weather Agent output ────────────────────────────
-    current_space_weather: Optional[SpaceWeatherCondition]
+    current_space_weather: Annotated[Optional[SpaceWeatherCondition], lambda a, b: b if b is not None else a]
     weather_forecast: Annotated[list[dict], _merge_list]
-    atmospheric_density_model: Optional[dict]
-    drag_impact_assessment: Optional[str]
+    atmospheric_density_model: Annotated[Optional[dict], lambda a, b: b if b is not None else a]
+    drag_impact_assessment: Annotated[Optional[str], lambda a, b: b if b is not None else a]
     radiation_alerts: Annotated[list[dict], _merge_list]
 
     # ── Aerospace Research Agent output ───────────────────────
     research_results: Annotated[list[AerospaceKnowledge], _merge_list]
     knowledge_graph_results: Annotated[list[dict], _merge_list]
     cited_sources: Annotated[list[dict], _merge_list]
-    topic_summary: Optional[str]
+    topic_summary: Annotated[Optional[str], lambda a, b: b if b is not None else a]
 
     # ── Satellite Intelligence Agent output ───────────────────
     satellite_profiles: Annotated[list[dict], _merge_list]
     operator_intel: Annotated[list[dict], _merge_list]
     catalog_search_results: Annotated[list[dict], _merge_list]
-    constellation_analysis: Optional[dict]
+    constellation_analysis: Annotated[Optional[dict], lambda a, b: b if b is not None else a]
     satellite_health: Annotated[list[dict], _merge_list]
 
     # ── Safety and monitoring ─────────────────────────────────
     safety_approved: bool
     safety_flags: Annotated[list[str], _merge_list]
-    safety_override_reason: Optional[str]
+    safety_override_reason: Annotated[Optional[str], lambda a, b: b if b is not None else a]
     agent_call_log: Annotated[list[AgentCallRecord], _merge_list]
     errors: Annotated[list[dict], _merge_list]
 
     # ── Timing and metadata ───────────────────────────────────
     started_at: str
     completed_at: Optional[str]
-    total_latency_ms: Optional[float]
-    tokens_total: int
-    graph_iteration: int
+    total_latency_ms: Annotated[Optional[float], lambda a, b: b if b is not None else a]
+    tokens_total: Annotated[int, lambda a, b: a + b]
+    graph_iteration: Annotated[int, lambda a, b: max(a, b)]
 
 
 def initial_state(query: str, session_id: Optional[str] = None) -> OrbitalState:
