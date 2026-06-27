@@ -503,3 +503,42 @@ export interface PlatformStatus {
 }
 export const fetchPlatformStatus = (): Promise<PlatformStatus> =>
   apiFetch<PlatformStatus>("/platform/status");
+
+// ─── Satellite Catalog List ───────────────────────────────────────────────────
+// Endpoint: GET /api/v1/catalog/satellites
+// Returns paginated satellite list from PostgreSQL (all 29,198 objects)
+
+export interface CatalogSatellite {
+  norad_id:        number;
+  name:            string;
+  object_type:     string;   // PAYLOAD | ROCKET_BODY | DEBRIS | UNKNOWN
+  regime:          string;   // LEO | MEO | GEO | HEO | SSO | VLEO | UNKNOWN
+  inclination_deg: number | null;
+  perigee_km:      number | null;
+  apogee_km:       number | null;
+  period_minutes:  number | null;
+  country_code:    string | null;
+}
+
+export interface CatalogSatelliteResponse {
+  total:   number;
+  page:    number;
+  limit:   number;
+  objects: CatalogSatellite[];
+}
+
+export const fetchSatelliteList = (params: {
+  regime?: string;
+  type?:   string;
+  search?: string;
+  page?:   number;
+  limit?:  number;
+}): Promise<CatalogSatelliteResponse> => {
+  const q = new URLSearchParams();
+  if (params.regime && params.regime !== "ALL") q.set("regime", params.regime);
+  if (params.type   && params.type   !== "ALL") q.set("type",   params.type);
+  if (params.search) q.set("search", params.search);
+  if (params.page  !== undefined) q.set("page",  String(params.page));
+  if (params.limit !== undefined) q.set("limit", String(params.limit));
+  return apiFetch<CatalogSatelliteResponse>(`/catalog/satellites?${q.toString()}`);
+};
