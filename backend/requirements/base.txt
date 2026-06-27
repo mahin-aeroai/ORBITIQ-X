@@ -69,3 +69,6 @@ pytz
 email-validator
 pydantic[email]
 opentelemetry-exporter-otlp-proto-grpc
+
+# Vector store
+qdrant-client==1.14.3
