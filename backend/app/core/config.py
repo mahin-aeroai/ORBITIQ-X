@@ -91,7 +91,9 @@ class Settings(BaseSettings):
     # ─── Redis ────────────────────────────────────────────────────────────────
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
-    REDIS_PASSWORD: SecretStr = Field(...)
+    # Railway injects REDIS_URL (full connection string) rather than REDIS_PASSWORD
+    # as a separate env var. Default to empty so Settings loads when only REDIS_URL is set.
+    REDIS_PASSWORD: SecretStr = SecretStr("")
     REDIS_DB: int = Field(default=0, ge=0, le=15)
     REDIS_CACHE_TTL_SECONDS: int = Field(default=3600, ge=60)
     REDIS_STREAM_AGENT_BUS: str = "orbitiq:agents:bus"
