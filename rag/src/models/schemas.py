@@ -140,6 +140,7 @@ class CitationRecord:
     title:             str           = ""
     doc_id:            str           = ""
     year:              Optional[int] = None
+    doi:              Optional[str] = None
 
 
 @dataclass
