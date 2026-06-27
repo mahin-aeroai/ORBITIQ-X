@@ -88,6 +88,8 @@ class ChunkMetadata:
     source_url:       Optional[str]   = None
     doc_title:        str             = ""
     authors:          list[str]       = field(default_factory=list)
+    page_start:       Optional[int]   = None
+    page_end:         Optional[int]   = None
 
 
 @dataclass
@@ -135,6 +137,7 @@ class CitationRecord:
     authors:           list[str]     = field(default_factory=list)
     title:             str           = ""
     doc_id:            str           = ""
+    year:              Optional[int] = None
 
 
 @dataclass

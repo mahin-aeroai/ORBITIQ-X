@@ -483,9 +483,9 @@ class AerospaceContextAssembler:
             for cit in doc_citations[:5]:
                 evidence.append(EvidenceSource(
                     source_type="document",
-                    source_id=cit.doc_id if hasattr(cit, "doc_id") else str(cit.get("doc_id", "")),
-                    title=cit.title if hasattr(cit, "title") else str(cit.get("title", "")),
-                    content=cit.excerpt if hasattr(cit, "excerpt") else str(cit.get("excerpt", "")),
+                    source_id=cit.doc_id if hasattr(cit, "doc_id") else "",
+                    title=cit.title if hasattr(cit, "title") else "",
+                    content=cit.excerpt if hasattr(cit, "excerpt") else "",
                     entity_type="Document",
                     relevance=cit.relevance_score if hasattr(cit, "relevance_score") else 0.7,
                     url=cit.source_url if hasattr(cit, "source_url") else None,
@@ -675,10 +675,10 @@ Question: {query}"""
             citations=[
                 {
                     "key": cit.citation_key if hasattr(cit, "citation_key") else f"[{i+1}]",
-                    "title": cit.title if hasattr(cit, "title") else str(cit.get("title", "")),
-                    "agency": cit.agency if hasattr(cit, "agency") else str(cit.get("agency", "")),
-                    "year": cit.year if hasattr(cit, "year") else cit.get("year"),
-                    "excerpt": cit.excerpt[:200] if hasattr(cit, "excerpt") else str(cit.get("excerpt", ""))[:200],
+                    "title": cit.title if hasattr(cit, "title") else "",
+                    "agency": cit.agency if hasattr(cit, "agency") else "",
+                    "year": cit.year if hasattr(cit, "year") else None,
+                    "excerpt": cit.excerpt[:200] if hasattr(cit, "excerpt") else ""[:200],
                 }
                 for i, cit in enumerate(doc_citations[:8])
             ],
