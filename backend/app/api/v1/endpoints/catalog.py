@@ -454,3 +454,62 @@ async def get_satellite(
         tle_age_days=sat.tle_age_days,
         tle_source=sat.tle_source,
     )
+
+
+# ── GET /catalog/satellites ───────────────────────────────────────────────────
+
+@router.get(
+    "/satellites",
+    summary="Paginated satellite catalog",
+    description="Query the full satellite catalog with optional filters.",
+)
+async def list_satellites(
+    regime:  str | None = None,
+    type:    str | None = None,
+    search:  str | None = None,
+    page:    int = 0,
+    limit:   int = 200,
+    session: AsyncSession = Depends(get_session),
+) -> ORJSONResponse:
+    from sqlalchemy import select, or_, func, String
+    from app.db.models.satellites import Satellite
+
+    q = select(
+        Satellite.norad_id,
+        Satellite.name,
+        Satellite.object_type,
+        Satellite.regime,
+        Satellite.inclination_deg,
+        Satellite.perigee_km,
+        Satellite.apogee_km,
+        Satellite.period_minutes,
+        Satellite.country_code,
+    )
+
+    if regime and regime != "ALL":
+        q = q.where(Satellite.regime == regime.upper())
+    if type and type != "ALL":
+        q = q.where(Satellite.object_type == type.upper())
+    if search:
+        like = f"%{search}%"
+        q = q.where(or_(
+            Satellite.name.ilike(like),
+            func.cast(Satellite.norad_id, String).like(f"{search}%"),
+        ))
+
+    # Total count
+    count_q = select(func.count()).select_from(q.subquery())
+    total_result = await session.execute(count_q)
+    total = total_result.scalar() or 0
+
+    # Paginated data
+    q = q.order_by(Satellite.norad_id).offset(page * limit).limit(min(limit, 500))
+    result = await session.execute(q)
+    rows = result.mappings().all()
+
+    return ORJSONResponse(content={
+        "total":   total,
+        "page":    page,
+        "limit":   limit,
+        "objects": [dict(r) for r in rows],
+    })
