@@ -116,7 +116,11 @@ class Settings(BaseSettings):
     NEO4J_DATABASE: str = "orbitiq"
 
     @property
-    def NEO4J_URI(self) -> str:
+     def NEO4J_URI(self) -> str:
+        import os as _os
+        env_uri = _os.environ.get("NEO4J_URI", "")
+        if env_uri:
+            return env_uri
         return f"bolt://{self.NEO4J_HOST}:{self.NEO4J_BOLT_PORT}"
 
     # ─── Weaviate ─────────────────────────────────────────────────────────────
