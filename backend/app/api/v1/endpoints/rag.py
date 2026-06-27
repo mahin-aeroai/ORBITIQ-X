@@ -315,6 +315,8 @@ def _get_bridge():
                 logger.info("qdrant_openai_pipeline_initialized url=%s", qdrant_url)
         except Exception as exc:
             logger.warning("qdrant_pipeline_init_failed error=%s", exc)
+            import traceback as _tb
+            logger.warning("qdrant_pipeline_traceback: %s", _tb.format_exc()[:500])
 
     return _bridge
 
