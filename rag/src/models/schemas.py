@@ -19,6 +19,7 @@ class AgencyType(str, Enum):
     JAXA      = "JAXA"
     ROSCOSMOS = "ROSCOSMOS"
     SPACEX    = "SpaceX"
+    CNSA      = "CNSA"
     OTHER     = "OTHER"
 
 
