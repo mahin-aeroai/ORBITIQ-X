@@ -218,3 +218,36 @@ Claude        → claude-sonnet-4-6, full GraphRAG + agent synthesis
 GraphRAG mode → full_graphrag (Neo4j + Qdrant + Anthropic)
 Agent result  → ORBITIQ-X MISSION DIRECTOR BRIEFING with live orbital data
 ```
+
+---
+
+## Phase 16D — Aerospace Foundation Model — OPERATIONAL (2026-06-27)
+
+### Production Metrics (measured live)
+
+| Tier | Query | Latency | Result |
+|---|---|---|---|
+| Tier 1 — baseline | SGP4 explanation | 16,107ms | Full technical answer |
+| Tier 2 — graphrag | LEO population + conjunction risk | 11,947ms | 25,285 objects from live graph |
+| Tier 3 — agent | LEO vs GEO debris risk comparison | 24,407ms | Multi-agent analysis dispatched |
+
+### Foundation Model Status
+```
+status:             operational
+registered_models:  3
+benchmark_tasks:    17
+tiers_available:    baseline, graphrag, agent
+```
+
+### Full Platform Stack — OPERATIONAL
+
+| Component | Status | Detail |
+|---|---|---|
+| PostgreSQL | ✅ | 29,198 satellites, 84,661 TLE records |
+| Redis | ⚠️ | Unavailable (config task) |
+| Neo4j | ✅ | 29,248 nodes, 29,198 relationships |
+| Qdrant | ✅ | aerospace_docs collection |
+| LangGraph agents | ✅ | 7 specialist agents |
+| GraphRAG | ✅ | full_graphrag mode |
+| Foundation Model | ✅ | 3 tiers, 17 benchmark tasks |
+| Claude | ✅ | claude-sonnet-4-6 |
