@@ -134,12 +134,16 @@ Platform infrastructure is **stable**. Development focus is permanently on **Kno
 - 9 REST endpoints at `/api/v2/ingestion`: adapters, schedule, log, manual trigger, enable/disable
 - Migration `0014`: `ingestion_schedule_log` + `ingestion_source_config` (5 adapters seeded) + `ingestion_dedup_cache`
 
-### Phase 17.5: Reusable Entity Intelligence Pages
-- Universal React entity page component (base layout + class extension panels)
-- AI Executive Summary card with confidence indicator
-- Relationship tab groups (Organizational / Technical / Commercial / Scientific)
-- Mini graph preview + full Knowledge Graph Viewer
-- Entity-class extensions: LV launch history, SAT orbital params, Paper citation network
+### Phase 17.5: Reusable Entity Intelligence Pages ✅ Complete
+- `EntityHeader`: class badge (20+ types), copyable AQID, lifecycle + confidence badges, aliases, tags
+- `AISummaryCard`: summary prose + key facts grid + async refresh
+- `EntityTimeline`: horizontal scroll, importance color-coding, date precision
+- `RelationshipPanel`: 10-category tabs, search filter, direction arrows, confidence dots
+- `QuickFacts`: class-aware fact extraction + mini SVG radial graph
+- `ProvenancePanel`: tier labels, verification badges, collapse/expand
+- `/entities` browser: 24/page grid, 17 class filters, full-text search
+- `/entities/[aqid]`: universal 8-panel intelligence page
+- `caem-api.ts`: full typed client for all `/api/v2/*` endpoints
 
 ### Phase 17.6: Cross-Entity Navigation
 - Every entity reference is a clickable link to its entity page

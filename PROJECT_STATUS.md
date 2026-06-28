@@ -55,7 +55,7 @@
 | GraphRAG avg latency | ~27,921ms |
 | API endpoints | 140 (103 + 9 CAEM + 10 Rel + 9 Prov + 9 Ingest) |
 | Alembic migrations | 14 |
-| Frontend pages | 10 (all active) |
+| Frontend pages | 12 (+ entities browser + entity detail) |
 | CAEM entity classes | 39 |
 | CAEM relationship types | 76 |
 | CAEM extension schemas | 31 |
@@ -97,6 +97,7 @@
 | **Phase 17.2** | **Universal Relationship Ontology** | ✅ |
 | **Phase 17.3** | **Provenance & Versioning** | ✅ |
 | **Phase 17.4** | **Knowledge Ingestion Framework** | ✅ |
+| **Phase 17.5** | **Reusable Entity Intelligence Pages** | ✅ |
 
 ---
 

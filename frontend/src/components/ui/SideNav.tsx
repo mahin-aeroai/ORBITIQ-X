@@ -31,6 +31,7 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
       { href: "/intelligence",    label: "AI Workspace",     icon: "◈" },
       { href: "/agents",          label: "Agents",           icon: "◎", minRole: "analyst" },
       { href: "/knowledge-graph", label: "Knowledge Graph",  icon: "◉", minRole: "analyst" },
+      { href: "/entities",         label: "Entity Browser",   icon: "◆", minRole: "analyst" },
       { href: "/graphrag",        label: "GraphRAG",         icon: "◑", minRole: "analyst" },
     ],
   },

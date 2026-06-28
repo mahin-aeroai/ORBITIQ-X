@@ -18,6 +18,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0-dev] — Phase 17.5 — Reusable Entity Intelligence Pages
+
+### Added
+
+#### CAEM API Client (`frontend/src/lib/caem-api.ts`)
+- Typed wrappers for all `/api/v2/*` CAEM endpoints
+- Types: `EntitySummary`, `EntityFull`, `TimelineEvent`, `KeyFact`, `ProvenanceRecord`, `RelationshipEntry`, `NeighborhoodGraph`, `GraphNode`, `GraphEdge`
+- `caemApi`: `listEntities()`, `getEntity()`, `getRelationships()`, `getNeighborhood()`, `searchEntities()`, `refreshSummary()`, `getOntology()`, `getTemporalSnapshot()`, `getEntityFacts()`, `getSnapshots()`
+
+#### CAEM Components (`frontend/src/components/caem/`)
+- `EntityHeader.tsx` — Entity class badge (20+ class types with icon + color), display name, copyable AQID, lifecycle badge, confidence badge (Authoritative/Verified/Confirmed/Unverified/Disputed), aliases, tags, domains. All using existing design tokens.
+- `AISummaryCard.tsx` — AI executive summary prose + key facts grid + manual refresh trigger with async queue notification
+- `EntityTimeline.tsx` — Horizontally scrollable chronological timeline; color-coded by importance (critical red / major indigo / minor slate); date precision-aware formatting; linked entity chips
+- `RelationshipPanel.tsx` — 10-category tab group (All/Org/Ops/Tech/Science/Supply/Commercial/Regulatory/Historical/Knowledge/Geo); search filter; confidence dot; provenance link; direction arrow (→ outbound / ← inbound); each row links to peer entity page
+- `QuickFacts.tsx` — Entity-class-aware fact extraction from `extension_data` (satellite orbital params, LV payload capacity, company revenue/employees, mission status/destination, paper DOI/citations, country space budget); mini SVG radial neighborhood graph preview
+- `ProvenancePanel.tsx` — Source cards with tier label, confidence %, verification badge, publisher, citation text; show all/collapse; version note
+
+#### Entity Pages (`frontend/src/app/entities/`)
+- `page.tsx` — Entity Browser: 24-per-page grid, class filter pills (17 entity classes), full-text search (≥2 chars), TanStack Query with stale time, loading skeleton, entity cards with class badge + description + tags + AI summary snippet + confidence
+- `[aqid]/page.tsx` — Universal Entity Intelligence Page: 8-panel canonical layout:
+  1. EntityHeader (sticky)
+  2. AI Intelligence Summary
+  3. Quick Facts + Mini Graph
+  4. Timeline
+  5. Relationships (tab-grouped)
+  6. Technical Details (extension_data flat fields)
+  7. Sources & Provenance
+  8. Historical Context (long_description)
+  Loading skeleton, error state, TanStack Query for entity + relationships + neighborhood in parallel
+
+#### Navigation
+- `SideNav.tsx` — Added "Entity Browser" (icon ◆) after Knowledge Graph entry
+
+---
+
 ## [v0.5.0-dev] — Phase 17.4 — Knowledge Ingestion Framework
 
 ### Added
