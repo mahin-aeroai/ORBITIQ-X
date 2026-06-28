@@ -183,6 +183,42 @@ data = json.loads(opener.open(url, timeout=120).read())
 - Create Operator nodes in Neo4j with OPERATED_BY relationships
 - Operator risk profiles with conjunction exposure metrics
 
+
+---
+
+## Phase 17.1 — CAEM (Canonical Aerospace Entity Model)
+
+**Status:** ✅ Architecture defined · ingestion pipeline scaffolded
+
+### Entity Classes (39 types across 7 domains)
+- **Actors**: Country, Agency, Company, Person, Consortium
+- **Hardware**: Satellite, LaunchVehicle, SpacecraftBus, Payload, GroundStation, SensorInstrument
+- **Operations**: Mission, Program, Launch, OrbitalManeuver, ConjunctionEvent
+- **Places**: LaunchSite, GroundTrackRegion, OrbitalSlot, OrbitalRegime
+- **Knowledge**: ResearchPaper, Patent, Standard, TechnicalReport, Dataset
+- **Transactions**: Contract, Grant, Partnership, Acquisition
+- **Phenomena**: SpaceWeatherEvent, DebrisCloud, OrbitDecayEvent
+
+### Key Files
+| File | Purpose |
+|---|---|
+| `backend/app/caem/base.py` | BaseAerospaceEntity, AQID system, ProvenanceRecord, confidence scoring |
+| `backend/app/caem/entities.py` | 31 Pydantic extension schemas for all entity classes |
+| `backend/app/caem/relationships.py` | 76 RelationshipType values, AerospaceRelationship, Cypher builder |
+| `backend/app/caem/graph/neo4j_schema.py` | Idempotent Neo4j schema, constraints, GDS projections, batch upsert |
+| `backend/app/caem/ingestion/pipeline.py` | 7-stage CAEMIngestionPipeline with contradiction detection |
+
+### Four-Layer Persistence
+1. **PostgreSQL**: entity records + extension_data JSONB + provenance
+2. **Neo4j**: graph nodes (minimal props) + typed relationships
+3. **Qdrant**: semantic vectors per entity for similarity search
+4. **Frontend**: intelligence layer — entity pages, relationship explorer
+
+### Phase 17.2 Next
+- Universal Relationship Ontology: implement all 76 RelationshipType values in Neo4j
+- Operator nodes: populate OPERATED_BY from Space-Track ownership data
+- CAEM ingestion pipeline: wire PostgreSQL → Neo4j → Qdrant
+
 ---
 
 ## v0.4.0 Benchmark Baseline

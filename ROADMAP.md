@@ -67,7 +67,13 @@
 - **Space weather**: live Kp/F10.7/storm data from /space-weather/current
 - **ignoreBuildErrors**: fixed Vercel build failures (was blocking page deploys)
 
-### Phase 17.1: CAEM — Canonical Aerospace Entity Model ✅ (Defined)
+### Phase 17.1: CAEM — Canonical Aerospace Entity Model ✅
+- **39 entity types** across 7 domains: actors, hardware, operations, places, knowledge, transactions, phenomena
+- **76 RelationshipType** values across 10 semantic categories
+- **BaseAerospaceEntity**: AQID identifier system, ProvenanceRecord, confidence scoring, versioning
+- **7-stage CAEMIngestionPipeline**: extract → validate → deduplicate → enrich → embed → graph → index
+- **4-layer persistence**: PostgreSQL (JSONB) → Neo4j (graph) → Qdrant (vectors) → frontend (intelligence)
+- **Idempotent Neo4j schema**: constraints, GDS named graph projections, batch upsert utilities
 - 45+ entity type taxonomy defined
 - 4-layer persistence: PostgreSQL · Neo4j · Qdrant · frontend intelligence
 - Phase 17.2: Universal Relationship Ontology (next)
