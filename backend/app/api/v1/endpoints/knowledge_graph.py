@@ -291,10 +291,16 @@ async def analytics_top_operators(
     status: Annotated[str | None, Query()] = None,
 ) -> ORJSONResponse:
     _require_neo4j()
-    from app.graph.services.graph_analytics_service import GraphAnalyticsService
-    svc    = GraphAnalyticsService()
-    result = await svc.top_operators_by_satellite_count(limit=limit, status_filter=status)
-    return ORJSONResponse(content={"count": len(result), "operators": result})
+    from app.graph.connection import execute_read
+    # Use Constellation nodes (BELONGS_TO) as proxy for operators
+    result = await execute_read(
+        """
+        MATCH (c:Constellation)<-[:BELONGS_TO]-(s:Satellite)
+        RETURN c.name AS name, count(s) AS satellite_count
+        ORDER BY satellite_count DESC LIMIT $limit
+        """, limit=limit)
+    operators = [{"name": r["name"], "satellite_count": r["satellite_count"]} for r in result]
+    return ORJSONResponse(content={"count": len(operators), "operators": operators})
 
 
 @router.get(
@@ -308,8 +314,15 @@ async def analytics_top_countries(
     _require_neo4j()
     from app.graph.services.graph_analytics_service import GraphAnalyticsService
     svc    = GraphAnalyticsService()
-    result = await svc.top_countries_by_active_spacecraft(limit=limit)
-    return ORJSONResponse(content={"count": len(result), "countries": result})
+    from app.graph.connection import execute_read
+    result = await execute_read(
+        """
+        MATCH (c:Country)<-[:LAUNCHED_BY]-(s:Satellite)
+        RETURN c.code AS code, c.name AS name, count(s) AS satellite_count
+        ORDER BY satellite_count DESC LIMIT $limit
+        """, limit=limit)
+    countries = [{"code": r["code"], "name": r["name"], "satellite_count": r["satellite_count"]} for r in result]
+    return ORJSONResponse(content={"count": len(countries), "countries": countries})
 
 
 @router.get(
@@ -387,8 +400,15 @@ async def analytics_constellations(
     _require_neo4j()
     from app.graph.services.graph_analytics_service import GraphAnalyticsService
     svc    = GraphAnalyticsService()
-    result = await svc.largest_constellations(limit=limit)
-    return ORJSONResponse(content={"count": len(result), "constellations": result})
+    from app.graph.connection import execute_read
+    result = await execute_read(
+        """
+        MATCH (c:Constellation)<-[:BELONGS_TO]-(s:Satellite)
+        RETURN c.name AS name, count(s) AS satellite_count
+        ORDER BY satellite_count DESC LIMIT $limit
+        """, limit=limit)
+    consts = [{"name": r["name"], "satellite_count": r["satellite_count"]} for r in result]
+    return ORJSONResponse(content={"count": len(consts), "constellations": consts})
 
 
 @router.get(
@@ -400,8 +420,15 @@ async def analytics_regimes() -> ORJSONResponse:
     _require_neo4j()
     from app.graph.services.graph_analytics_service import GraphAnalyticsService
     svc    = GraphAnalyticsService()
-    result = await svc.orbital_regime_density()
-    return ORJSONResponse(content={"regimes": result})
+    from app.graph.connection import execute_read
+    result = await execute_read(
+        """
+        MATCH (r:OrbitalRegime)<-[:PART_OF]-(s:Satellite)
+        RETURN r.name AS regime, count(s) AS satellite_count
+        ORDER BY satellite_count DESC
+        """)
+    regimes = [{"regime": r["regime"], "satellite_count": r["satellite_count"]} for r in result]
+    return ORJSONResponse(content={"regimes": regimes})
 
 
 @router.get(
