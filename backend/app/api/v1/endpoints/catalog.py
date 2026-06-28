@@ -482,34 +482,13 @@ def _compute_regime(perigee_km, apogee_km, inclination_deg, stored_regime):
     return "HEO"
 
 def _normalize_type(raw: str, name: str = "", cospar: str = "") -> str:
-    """Normalise DB object_type to frontend-friendly uppercase.
-    When DB value is unknown/TBA, infer from name and COSPAR patterns."""
+    """Normalise DB object_type to frontend-friendly uppercase."""
     r = (raw or "unknown").lower().strip()
-    if r in ("satellite", "payload"):              return "PAYLOAD"
-    if r in ("debris",):                           return "DEBRIS"
-    if r in ("rocket_body", "r/b", "rocket body"): return "ROCKET_BODY"
-
-    # DB is UNKNOWN or TBA — infer from name patterns
-    n = (name or "").upper()
-    c = (cospar or "").upper()
-
-    # Debris indicators in name
-    if any(x in n for x in ("DEB", "DEBRIS", "FRAG", "R/B", "ROCKET", "STAGE",
-                              "ULLAGE", "SHROUD", "ADAPTOR", "ADAPTER", "PLATFORM",
-                              "COOLANT", "TANK")):
-        if any(x in n for x in ("R/B", "ROCKET", "STAGE", "ULLAGE")):
-            return "ROCKET_BODY"
-        return "DEBRIS"
-
-    # COSPAR piece indicator — letters beyond 'A' often indicate debris
-    # e.g. 1970-025B = rocket body, 1970-025C+ = debris
-    if c and len(c) >= 8:
-        piece = c.split("-")[-1] if "-" in c else ""
-        if len(piece) == 1 and piece == "A":   return "PAYLOAD"
-        if len(piece) == 1 and piece == "B":   return "ROCKET_BODY"
-        if len(piece) >= 1 and piece > "B":    return "DEBRIS"
-
-    return "PAYLOAD"  # default: assume payload
+    if r in ("satellite", "payload"):               return "PAYLOAD"
+    if r in ("debris",):                            return "DEBRIS"
+    if r in ("rocket_body", "r/b", "rocket body"):  return "ROCKET_BODY"
+    # TBA/UNKNOWN — return as-is so filters can work
+    return "UNKNOWN"
 
 @router.get(
     "/satellites",
@@ -573,7 +552,8 @@ async def list_satellites(
     regime_upper = (regime or "ALL").upper()
     needs_regime_filter = regime_upper not in ("ALL", "")
 
-    needs_type_filter = type_upper not in ("ALL", "")
+    # UNKNOWN/TBA means type data not available — skip type filter
+    needs_type_filter = type_upper not in ("ALL", "", "UNKNOWN")
 
     if not needs_regime_filter and not needs_type_filter:
         # Pure DB-level pagination — fastest path
