@@ -18,6 +18,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0-dev] — Phase 17.3 — Provenance & Versioning
+
+### Added
+
+#### Provenance Package (`backend/app/caem/provenance/`)
+- `models.py` — Core data models:
+  - `SourceTier` (6-tier authority hierarchy) + `TIER_CONFIDENCE_WEIGHTS`
+  - `infer_source_tier()`: auto-classify source URL → tier (NASA/ESA/SpaceX → Tier 1; NORAD/COSPAR → Tier 2; IEEE/arXiv/ACM → Tier 3)
+  - `FactRecord`: field-level provenance — source, tier, confidence, citation, DOI, is_primary, is_superseded chain
+  - `ContradictionRecord`: conflict between two sources on the same fact — with three-tier resolution (override/dispute/reject)
+  - `ReviewQueueItem`: human review task with priority (critical/high/medium/low), assignment, and resolution tracking
+  - `VersionSnapshot`: immutable point-in-time entity state copy with field_diffs and change_summary
+
+- `service.py` — `ProvenanceService`:
+  - `record_fact()`: store field provenance with auto tier inference and confidence defaulting
+  - `detect_contradiction()`: compare incoming vs existing primary fact — applies three-tier resolution protocol
+  - `resolve_review()`: apply human reviewer decision — updates fact_provenance, contradiction_log, review_queue atomically
+  - `create_snapshot()`: serialize full entity state to version_snapshots (triggered on publish or manually)
+  - `get_fact_history()`, `get_entity_facts()`, `get_contradictions()`, `get_review_queue()`, `get_snapshots()`
+
+#### New API (`backend/app/api/v1/endpoints/provenance.py`)
+9 endpoints at `/api/v2/provenance`:
+- `GET  /tiers` — Source authority tier reference with confidence weights
+- `GET  /{aqid}/facts` — All provenance facts grouped by field
+- `GET  /{aqid}/facts/{field}` — Full history for one field (all sources, primary flag, superseded chain)
+- `POST /{aqid}/facts` — Record a fact + auto-detect contradiction
+- `GET  /{aqid}/snapshots` — Version snapshots list (newest first)
+- `GET  /snapshots/{snapshot_id}` — Full snapshot with complete entity_state
+- `POST /{aqid}/snapshots` — Manual snapshot trigger
+- `GET  /contradictions` — Query contradiction log (filter by aqid/status)
+- `GET  /review` — Human review queue (sorted by priority then age)
+- `POST /review/{review_id}/resolve` — Human resolver applies override/reject/merge
+
+#### New Migration (`20260628_0013_provenance_versioning.py`)
+5 new tables:
+- `fact_provenance` — field-level provenance; GIN-indexed; tracks is_primary/is_superseded chain
+- `contradiction_log` — immutable conflict record; resolution + audit trail
+- `review_queue` — human review tasks with priority, assignment, resolution
+- `version_snapshots` — immutable entity state snapshots; GIN-indexed entity_state JSONB
+- `snapshot_trigger_log` — queue for publish-triggered snapshots (PostgreSQL trigger)
+- PostgreSQL trigger `trg_entity_publish_snapshot`: auto-queues snapshot when `lifecycle_status → 'published'`
+
+### Fixed
+- `infer_source_tier()`: added IEEE, arXiv, ACM, Springer, Elsevier to Tier 3 domain list
+
+---
+
 ## [v0.5.0-dev] — Phase 17.2 — Universal Relationship Ontology
 
 ### Added

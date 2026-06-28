@@ -59,9 +59,9 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 
 ## Current Phase
 
-**Phase 17.2 — Universal Relationship Ontology** ✅ Complete
+**Phase 17.3 — Provenance and Versioning** ✅ Complete
 
-**Next: Phase 17.3 — Provenance and Versioning**
+**Next: Phase 17.4 — Knowledge Ingestion Framework**
 
 All 76 relationship types formalized. Completed:
 - `relationship_ontology` table: 76 types with cardinality, direction, temporal rules
@@ -242,7 +242,7 @@ data = json.loads(opener.open(url, timeout=120).read())
 |---|---|---|
 | 17.1 | Canonical Aerospace Entity Model | ✅ Complete |
 | 17.2 | Universal Relationship Ontology | ✅ Complete |
-| 17.3 | Provenance and Versioning | Planned |
+| 17.3 | Provenance and Versioning | ✅ Complete |
 | 17.4 | Knowledge Ingestion Framework | Planned |
 | 17.5 | Reusable Entity Intelligence Pages | Planned |
 | 17.6 | Cross-Entity Navigation | Planned |

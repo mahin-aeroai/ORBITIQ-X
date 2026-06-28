@@ -114,11 +114,14 @@ Platform infrastructure is **stable**. Development focus is permanently on **Kno
 
 ## Planned Phases — Knowledge Engineering
 
-### Phase 17.3: Provenance and Versioning
-- Audit infrastructure for every fact (field-level change log)
-- Version history with diffs
-- Source authority tier enforcement
-- Contradiction record management and human review queue
+### Phase 17.3: Provenance and Versioning ✅ Complete
+- `fact_provenance` table — field-level source attribution and supersession chain
+- `contradiction_log` — immutable conflict record with three-tier auto-resolution
+- `review_queue` — human review tasks for disputed contradictions, priority-sorted
+- `version_snapshots` — immutable point-in-time entity state copies
+- `ProvenanceService` — full service layer with contradiction detection and review resolution
+- 9 REST endpoints at `/api/v2/provenance`
+- `infer_source_tier()` — URL-based authority tier classification (NASA/NORAD/IEEE/arXiv)
 
 ### Phase 17.4: Knowledge Ingestion Framework
 - Tier 1 pipelines: NASA, ESA, SpaceX, Space-Track official publications
