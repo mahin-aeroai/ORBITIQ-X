@@ -98,6 +98,7 @@
 | **Phase 17.3** | **Provenance & Versioning** | ✅ |
 | **Phase 17.4** | **Knowledge Ingestion Framework** | ✅ |
 | **Phase 17.5** | **Reusable Entity Intelligence Pages** | ✅ |
+| **Phase 17.6** | **Cross-Entity Navigation** | ✅ |
 
 ---
 

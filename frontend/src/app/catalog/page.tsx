@@ -82,7 +82,16 @@ function DetailDrawer({ noradId, onClose }: { noradId: number; onClose: () => vo
           )}
           <div className="font-mono text-[9px] text-[var(--color-text-tertiary)]">NORAD {noradId}</div>
         </div>
-        <button onClick={onClose} className="rounded border border-[var(--color-space-border)] px-2 py-0.5 font-mono text-[9px] text-[var(--color-text-tertiary)] hover:border-[#ef4444] hover:text-[#ef4444] transition-colors">✕ Close</button>
+        <div className="flex items-center gap-2">
+          {s?.aqid && (
+            <a href={`/entities/${encodeURIComponent(s.aqid)}`}
+              style={{ color: "#818cf8", borderColor: "rgba(99,102,241,0.4)", background: "rgba(99,102,241,0.08)" }}
+              className="rounded border px-2 py-0.5 font-mono text-[9px] hover:bg-indigo-500/20 transition-colors">
+              ◆ Entity Page
+            </a>
+          )}
+          <button onClick={onClose} className="rounded border border-[var(--color-space-border)] px-2 py-0.5 font-mono text-[9px] text-[var(--color-text-tertiary)] hover:border-[#ef4444] hover:text-[#ef4444] transition-colors">✕ Close</button>
+        </div>
       </div>
 
       {isLoading ? (

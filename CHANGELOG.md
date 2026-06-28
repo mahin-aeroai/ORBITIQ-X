@@ -18,6 +18,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0-dev] — Phase 17.6 — Cross-Entity Navigation
+
+### Added
+
+#### EntityLink (`frontend/src/components/caem/EntityLink.tsx`)
+- Universal component that renders any AQID as a navigable link to its Entity Intelligence Page
+- Four variants: `inline` (prose link), `badge` (colored pill), `chip` (compact mono), `card` (sidebar card with class + AQID)
+- `parseAqid()`: derives entity class and human label from AQID slug (e.g. `AQID-MISSION-ARTEMIS-II` → "Artemis II")
+- Class-specific colors + icons for 20+ entity types — consistent with EntityHeader palette
+- `AutoLink`: renders a string and converts any `AQID-*` tokens into EntityLink components automatically
+
+#### EntityBreadcrumb (`frontend/src/components/caem/Breadcrumb.tsx`)
+- Breadcrumb trail for graph exploration: `Mission Control › Entity Browser › [trail] › Current [Here]`
+- `sessionStorage`-backed navigation history — persists across page navigations within a session
+- Max 8 history entries; shows last 3 in trail (overflow truncated)
+- "Clear trail" button; class icons in trail items
+- `StaticBreadcrumb`: simpler static variant for non-entity pages
+
+#### RelatedEntitiesSidebar (`frontend/src/components/caem/RelatedEntitiesSidebar.tsx`)
+- 64px sidebar panel alongside entity intelligence page content
+- Three contextual sections (all lazy-loaded, non-blocking):
+  - **Graph Neighbors**: up to 8 entities from the `/neighborhood` endpoint (EntityLink card variant)
+  - **More [Class]**: up to 6 same-class entities (TanStack Query, links to `/entities?class=...`)
+  - **Also in [Domain]**: up to 5 cross-class entities sharing the primary domain
+- **Quick Jump** panel: Entity Browser, Knowledge Graph, AI Workspace, Satellite Catalog
+
+#### Wired navigation across existing pages
+- `/entities/[aqid]/page.tsx` — Breadcrumb added above EntityHeader; sidebar added to right of main content; two-column layout (flex-1 content + 64px sidebar)
+- `catalog/page.tsx` — Satellite detail drawer: "◆ Entity Page" button appears when `s.aqid` is present
+- `knowledge-graph/page.tsx` — Search result rows: "◆ Entity" link appears on hover (opacity transition); row gets `group` hover border
+
+---
+
 ## [v0.5.0-dev] — Phase 17.5 — Reusable Entity Intelligence Pages
 
 ### Added

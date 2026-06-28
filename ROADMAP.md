@@ -145,10 +145,11 @@ Platform infrastructure is **stable**. Development focus is permanently on **Kno
 - `/entities/[aqid]`: universal 8-panel intelligence page
 - `caem-api.ts`: full typed client for all `/api/v2/*` endpoints
 
-### Phase 17.6: Cross-Entity Navigation
-- Every entity reference is a clickable link to its entity page
-- Breadcrumb trail for graph exploration
-- Related entities sidebar · "You are here" position in knowledge graph
+### Phase 17.6: Cross-Entity Navigation ✅ Complete
+- `EntityLink`: universal AQID → link component (inline/badge/chip/card variants); `AutoLink` auto-converts AQID strings
+- `EntityBreadcrumb`: sessionStorage-backed trail (Mission Control › Browser › [path] › Here)
+- `RelatedEntitiesSidebar`: graph neighbors + same-class + shared-domain sections + quick jump
+- Wired into entity page (2-col layout), catalog drawer ("◆ Entity Page" button), KG search results (hover link)
 
 ### Phase 18: Redis Activation + Digital Twin
 - Fix Redis connectivity (add Railway Redis addon or `REDIS_URL`)

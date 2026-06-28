@@ -59,9 +59,9 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 
 ## Current Phase
 
-**Phase 17.5 — Reusable Entity Intelligence Pages** ✅ Complete
+**Phase 17.6 — Cross-Entity Navigation** ✅ Complete
 
-**Next: Phase 17.6 — Cross-Entity Navigation**
+**Next: Phase 17.7 — Business Intelligence Layer**
 
 All 76 relationship types formalized. Completed:
 - `relationship_ontology` table: 76 types with cardinality, direction, temporal rules
@@ -245,7 +245,7 @@ data = json.loads(opener.open(url, timeout=120).read())
 | 17.3 | Provenance and Versioning | ✅ Complete |
 | 17.4 | Knowledge Ingestion Framework | ✅ Complete |
 | 17.5 | Reusable Entity Intelligence Pages | ✅ Complete |
-| 17.6 | Cross-Entity Navigation | Planned |
+| 17.6 | Cross-Entity Navigation | ✅ Complete |
 
 ---
 

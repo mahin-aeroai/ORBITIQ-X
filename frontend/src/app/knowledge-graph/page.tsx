@@ -96,10 +96,17 @@ export default function KnowledgeGraphPage() {
         {search?.results && (
           <div className="mt-2 space-y-1">
             {(Array.isArray(search.results) ? search.results : []).slice(0, 10).map((r: any, i: number) => (
-              <div key={i} className="flex items-center gap-2 rounded border border-[var(--color-space-border)] bg-[var(--color-space-surface)] px-3 py-1.5">
+              <div key={i} className="flex items-center gap-2 rounded border border-[var(--color-space-border)] bg-[var(--color-space-surface)] px-3 py-1.5 hover:border-indigo-500 transition-colors group">
                 <span className="font-mono text-[9px] tabular-nums text-[var(--color-text-tertiary)]">{r.norad_id ?? r.id}</span>
                 <span className="font-mono text-[10px] text-[var(--color-text-primary)]">{r.name ?? r.label}</span>
                 <span className="ml-auto font-mono text-[9px]" style={{ color: REGIME_COLOR[r.regime] ?? "#475569" }}>{r.regime ?? "—"}</span>
+                {r.aqid && (
+                  <a href={`/entities/${encodeURIComponent(r.aqid)}`}
+                    style={{ color: "#818cf8" }}
+                    className="font-mono text-[9px] opacity-0 group-hover:opacity-100 transition-opacity hover:underline">
+                    ◆ Entity
+                  </a>
+                )}
                 {r.operator && <span className="font-mono text-[9px] text-[var(--color-text-tertiary)]">{r.operator}</span>}
               </div>
             ))}
