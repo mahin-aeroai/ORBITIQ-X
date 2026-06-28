@@ -8,246 +8,165 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Planned
-- Space-Track catalog sync activation
+- Phase 17.2 — Universal Relationship Ontology (Neo4j edge formalization)
+- Phase 17.3 — Provenance and Versioning infrastructure
+- Phase 17.4 — Knowledge Ingestion Framework (Tier 1–2 source pipelines)
+- Phase 17.5 — Reusable Entity Intelligence Pages (React universal entity page)
 - Redis pub/sub operational
-- Neo4j Aura integration
+- Space-Track catalog sync activation
+
+---
+
+## [v0.4.0] — 2026-06-28
+
+### Added — Phase 17.1: Canonical Aerospace Entity Model (CAEM)
+
+The foundational knowledge architecture for the Aerospace Knowledge Universe.
+
+#### CAEM Core (`backend/app/caem/`)
+- `base.py` — `BaseAerospaceEntity`: universal base model inherited by every aerospace entity
+  - AQID system: immutable `AQID-{CLASS}-{SLUG}` identifiers with generation and validation utilities
+  - `ProvenanceRecord`: full chain of custody per fact (source, authority tier, confidence, verification status)
+  - `TimelineEvent`: ordered lifecycle events with date precision and importance levels
+  - `VersionEntry` + `ChangeLogEntry`: full audit trail with field-level diffs
+  - `AIIntelligenceBlock`: cached AI executive summary, key facts, refresh flags
+  - `compute_entity_confidence()`: weighted composite scoring (source authority × 0.40 + verification × 0.35 + corroboration × 0.25)
+  - `to_neo4j_node()` / `to_qdrant_payload()`: layer-specific serialization methods
+  - 39 `EntityClass` enum values covering all aerospace entity types
+  - 10 supporting enums: `LifecycleStatus`, `VerificationStatus`, `SourceType`, `DatePrecision`, `ChangeType`, `ImportanceLevel`, `EntitySubclass`
+
+- `entities.py` — 31 typed extension schemas for entity-class-specific fields:
+  - Actor extensions: `CountryExtension`, `GovernmentAgencyExtension`, `CommercialCompanyExtension`, `UniversityExtension`, `PersonExtension`
+  - Hardware extensions: `LaunchVehicleExtension` (stages, payload capacity, success rate), `SatelliteExtension` (NORAD ID, COSPAR, orbit params), `ComponentExtension`
+  - Infrastructure extensions: `LaunchSiteExtension` (lat/lon, pads, inclinations), `GroundStationExtension`
+  - Program extensions: `ProgramExtension`, `MissionExtension`, `ConstellationExtension`
+  - Knowledge extensions: `TechnologyExtension` (TRL), `StandardExtension`, `ResearchPaperExtension` (DOI, citations), `PatentExtension` (IPC codes)
+  - Commercial extensions: `ContractExtension`, `InvestmentExtension`
+  - Event extensions: `IncidentExtension` (severity, root cause, corrective actions)
+  - Celestial extensions: `CelestialBodyExtension` (Torino scale, PHAs)
+  - `EXTENSION_REGISTRY`: maps every `EntityClass` to its extension model
+  - `validate_extension()`: type-safe validation before persistence
+
+- `relationships.py` — Universal Relationship Ontology:
+  - 76 typed `RelationshipType` values across 10 semantic categories:
+    - Organizational: `PART_OF`, `SUBSIDIARY_OF`, `FUNDED_BY`, `COLLABORATES_WITH`, `ACQUIRED_BY`...
+    - Operational: `OPERATED_BY`, `LAUNCHED_BY`, `LAUNCHED_FROM`, `CONTROLLED_FROM`, `ORBITS`...
+    - Supply chain: `MANUFACTURED_BY`, `SUPPLIED_BY`, `COMPONENT_OF`, `USES_MATERIAL`...
+    - Technical: `USES_TECHNOLOGY`, `IMPLEMENTS`, `SUCCESSOR_OF`, `CERTIFIED_BY`, `ENABLES`...
+    - Scientific: `DISCOVERED_BY`, `AUTHORED_BY`, `CITES`, `REFERENCES`, `VALIDATES`...
+    - Commercial: `AWARDED_TO`, `INVESTED_IN`, `PROVIDES_SERVICE_TO`...
+    - Regulatory: `REGULATED_BY`, `COMPLIES_WITH`, `RATIFIED_BY`, `SANCTIONS`...
+    - Historical: `PRECEDED_BY`, `CAUSED`, `TRIGGERED`, `EVOLVED_INTO`...
+    - Knowledge: `DESCRIBED_BY`, `STANDARDIZED_IN`, `PATENTED_BY`, `INSPIRED`...
+    - Geographic: `LOCATED_IN`, `OPERATES_IN`, `COVERS`, `LAUNCHES_TO`...
+  - `AerospaceRelationship`: typed directed relationship model with temporal properties (`since`/`until`), confidence, provenance, `validate()`, and `to_cypher_merge()` Cypher builder
+  - `RELATIONSHIP_CATEGORIES`: category grouping for frontend tab organization
+  - `TRAVERSAL_PATTERNS`: 8 reference Cypher patterns for the Graph Agent
+
+- `graph/neo4j_schema.py` — Neo4j schema initializer:
+  - Idempotent schema setup (safe to re-run): unique AQID constraint, existence constraints, property indexes, full-text index on entity names
+  - `initialize_neo4j_schema()`: runs all constraints and indexes against Neo4j driver
+  - `upsert_entity_node()`: single-entity node upsert with APOC and non-APOC variants
+  - `batch_upsert_nodes()`: UNWIND-based batch upsert for ingestion pipelines
+  - 4 named GDS graph projections: `full_aerospace_graph`, `supply_chain_graph`, `organizational_graph`, `scientific_graph`
+
+- `ingestion/pipeline.py` — 7-stage `CAEMIngestionPipeline`:
+  - Stage 1: Normalize — maps raw entity types to `EntityClass`, applies source authority confidence floor
+  - Stage 2: Resolve & Validate — AQID resolution (exact → display_name → alias → generate), extension validation
+  - Stage 3: Contradiction Detection — three-tier resolution: override (Δ > 0.15) / dispute (within 0.15) / reject (Δ < −0.15)
+  - Stage 4: Persist — parallel write to PostgreSQL (`aerospace_entities`) and Neo4j
+  - Stage 5: Relationships — type classification, validation, Neo4j edge + PostgreSQL cache write
+  - Stage 6: AI Verification — flags `ai_requires_refresh` for async Summary Agent processing
+  - Stage 7: Auto-Publish — promotes entities meeting confidence threshold to `published`
+  - Full `IngestionJob` audit trail written to `entity_ingestion_log`
+
+#### New API Endpoint (`backend/app/api/v1/endpoints/entities.py`)
+- `GET    /api/v2/entities` — list with filters (class, domain, region, status, confidence), cursor pagination
+- `POST   /api/v2/entities` — create entity with AQID generation and extension validation
+- `GET    /api/v2/entities/{aqid}` — full entity record
+- `PATCH  /api/v2/entities/{aqid}` — partial update with extension data merge
+- `GET    /api/v2/entities/{aqid}/relationships` — relationship list from PostgreSQL cache
+- `GET    /api/v2/entities/{aqid}/neighborhood` — Neo4j graph neighborhood (configurable depth 1–4)
+- `POST   /api/v2/entities/{aqid}/sources` — add provenance source, recomputes confidence
+- `POST   /api/v2/entities/{aqid}/refresh-summary` — queue AI summary regeneration
+- `GET    /api/v2/entities/search/fulltext` — PostgreSQL GIN tsvector full-text search
+
+#### New Migration (`backend/alembic/versions/20260628_0011_caem_base_entities.py`)
+- `aerospace_entities` — single-table inheritance master table with GIN indexes (tags, domains, aliases, extension_data), full-text GIN index, auto-update trigger
+- `entity_aliases` — cross-system external ID mappings (NORAD/COSPAR/DOI/ISO/CIK)
+- `entity_relationships_cache` — denormalized Neo4j relationship cache for fast REST responses
+- `entity_ingestion_log` — full per-job ingestion audit
+- `knowledge_domains` — reference table seeded with 16 aerospace domains
+- `relationship_type_registry` — relationship type taxonomy reference
+
+---
+
+## [v0.3.0] — 2026-06-27
+
+### Added — Phase 16A–16D: Full AI Stack Activation
+
+#### Phase 16A — Neo4j Knowledge Graph (Operational)
+- Neo4j Aura instance connected: `bff8c462.databases.neo4j.io`
+- 29,248 nodes: 29,198 satellite nodes + 50 reference nodes (OrbitalRegime×9, Agency×14, LaunchVehicle×15, LaunchSite×12)
+- 29,198 `ORBITS` relationships (Satellite→OrbitalRegime)
+- KG health latency: ~610ms warm
+
+#### Phase 16B — GraphRAG / Qdrant (Operational)
+- Qdrant cluster connected: `2435500e-5c7d-4182-b1ad-c3f0ca35a8a0.us-west-1-0.aws.cloud.qdrant.io`
+- `aerospace_docs` collection live
+- `full_graphrag` mode: Neo4j + Qdrant + Claude synthesis
+- GraphRAG query latency: ~9–11 seconds
+- 185-chunk GraphRAG corpus, 20/20 benchmark retrieval queries passed
+
+#### Phase 16C — AI Mission Intelligence (Operational)
+- LangGraph multi-agent system: 4 agents running concurrently via Send API
+- Agents: `orbital_dynamics`, `conjunction_analysis`, `space_debris`, `satellite_intelligence`
+- End-to-end mission briefing latency: ~96 seconds
+
+#### Phase 16D — Aerospace Foundation Model (Operational)
+- 3-tier foundation model: baseline / graphrag / agent
+- 17 benchmark tasks registered
+- Tier latencies: Tier 1 ~16s, Tier 2 ~12s, Tier 3 ~24s
 
 ---
 
 ## [v0.1.0] — 2026-06-26
 
-First production release. Full-stack aerospace intelligence platform deployed on Railway (backend) and Vercel (frontend).
-
-### Added
+### Added — Phase 15A: Production Deployment
 
 #### Backend
-- FastAPI application with 103 API endpoints across 12 routers: auth, ssa, catalog, digital-twin, conjunctions, knowledge-graph, agents, foundation, rag, space-weather, mission, platform
-- PostgreSQL schema via 10 Alembic migrations: users, user_sessions, operators, satellites, tle_records, missions, conjunction_events, orbital_events, audit_logs, sync_metrics
-- JWT authentication with RBAC — register, login, refresh, logout, role guard (admin/operator/analyst/readonly)
-- APScheduler with 5 scheduled jobs: orbital propagation (15min), TLE refresh (2h), conjunction screening (6h), Neo4j population (6h), full catalog sync (daily)
-- SGP4 orbital propagation via `sgp4` library
-- Conjunction CDM generation and probability-of-collision computation
+- FastAPI application with 103 API endpoints across 12 routers
+- PostgreSQL schema via 10 Alembic migrations
+- JWT authentication with RBAC
+- APScheduler with 5 scheduled jobs
+- SGP4 orbital propagation, conjunction CDM generation
 - LangGraph multi-agent system with Claude claude-sonnet-4-6
-- Neo4j knowledge graph integration (operator/satellite/country/constellation)
+- Neo4j knowledge graph integration
 - Weaviate vector store RAG pipeline
 - Space weather integration (NOAA/SWPC)
 - Redis pub/sub for real-time SSE conjunction alerts
-- Prometheus metrics via `prometheus-fastapi-instrumentator`
-- OpenTelemetry distributed tracing
-- Sentry error tracking
-- structlog structured JSON logging
-- Global exception handler with full traceback in JSON response
-- `/health` liveness probe + `/ready` readiness probe
+- Prometheus metrics, OpenTelemetry tracing, Sentry error tracking
 
 #### Frontend
 - Next.js 14 App Router application
-- Mission Control dashboard with live UTC clock, metrics bar, orbital visualization
-- Static SVG orbital surveillance visualization (Cesium temporarily disabled — WebGL incompatibility)
-- Space weather panel (Kp index, solar flux, geomagnetic status)
-- Active conjunction alerts panel with real-time polling
-- Agent activity feed
-- System Status page with full service health matrix
-- Catalog, Conjunctions, Agents, Knowledge Graph, Foundation placeholder pages
-- Edge middleware auth guard with HttpOnly refresh cookie
-- TanStack Query data fetching layer
-- Responsive dark space aesthetic (deep navy / electric indigo palette)
+- Mission Control dashboard, Satellite Catalog, Conjunctions, Agents, Knowledge Graph, Foundation pages
+- Animated globe dashboard, dark space aesthetic (deep navy / electric indigo)
 
 #### Deployment
-- Railway Docker deployment (`backend/Dockerfile.railway`) — `python:3.11-slim-bookworm`
-- Vercel production deployment with Next.js 14
+- Railway Docker deployment (`backend/Dockerfile.railway`)
+- Vercel production deployment
 - `entrypoint.sh` — DATABASE_URL parsing, Alembic migration execution, gunicorn launch
-- `railway.toml` — healthcheck, restart policy, build configuration
 
-### Fixed
-
-#### Critical Production Fixes (Phase 15A)
-- **Nixpacks glibc/greenlet incompatibility** — switched from Nixpacks to Dockerfile builder; `python:3.11-slim-bookworm` resolves `GLIBC_2.38` mismatch (`5dbb94e`)
-- **Alembic silent DDL rollback** — added `AUTOCOMMIT` isolation level; SQLAlchemy's default transaction wrapping caused all `CREATE TABLE` statements to roll back silently on Railway PostgreSQL 18 (`85be9bf`)
-- **SQLAlchemy mapper `InvalidRequestError`** — removed all cross-model string `primaryjoin` relationships (`type: ignore[name-defined]`) across 7 model files; caused crash on every request (`80c8408`)
-- **Missing `ForeignKey` on `UserSession.user_id`** — column had comment `"FK → users.id"` but no actual `ForeignKey()` constraint; caused `NoForeignKeysError` on every `User` instantiation (`5054932`)
-- **`AuditLog` relationship `back_populates` broken** — `User.audit_logs` removed but `AuditLog.user` still referenced it; caused `InvalidRequestError` (`db0c5ec`)
-- **`bcrypt` + `passlib` version incompatibility** — pinned `bcrypt<4.0.0`; `passlib 1.7.4` uses `bcrypt.__about__.__version__` which doesn't exist in bcrypt 4.x (`4ecca4b`)
-- **`agent_service.py` `parents[4]` IndexError** — Docker path `/app/app/services/` only has 3 parent levels; fixed with candidate path list (`bf70e98`)
-- **DATABASE_URL not reaching Alembic** — `ORBITIQ_DATABASE_URL` now set in entrypoint before migration subprocess (`b423aaa`)
-- **`ORJSONResponse` deprecated** — replaced with `JSONResponse` throughout auth endpoints and removed as `default_response_class` (`4b75f56`, `10a0104`)
-- **React `Component` class in server component** — removed `GlobeErrorBoundary` from `page.tsx` (server component cannot use React class) (`efe3147`)
-- **Next.js build `SyntaxError: Octal escape sequences`** — replaced Cesium `OrbitalGlobe` with pure static SVG component (`593cad9`)
-- **Double `/api/v1/` in frontend API URLs** — `NEXT_PUBLIC_API_URL` set with `/api/v1` suffix but code also appended it; fixed with `.split('/api/v1')[0]` (`6cab2c4`)
-- **`count_result.scalars().all()` first-user check** — replaced with `COUNT(*)` query (`4276aa7`)
-- **Login session state conflict** — `_create_session()` committed shared session, making subsequent `update(User)` fail; reordered operations (`8f9de14`)
-- **`BACKEND_CORS_ORIGINS` JSON parsing** — pydantic-settings list field needed JSON array format; added validator for both comma-separated and JSON formats
-- **TrustedHostMiddleware blocking Railway health checks** — added wildcard to `allowed_hosts` (`8b7d1e3`)
-- **`search_path` asyncpg parameter** — removed `?options=-csearch_path` (not supported by asyncpg); used `server_settings` instead then removed when not needed
-- **`transaction_per_migration=True` conflicting with `begin_transaction()`** — removed; caused nested transaction conflict
-
-### Security
-- JWT access tokens stored in-memory only (never localStorage)
-- Refresh tokens stored as HttpOnly cookies (XSS-resistant)
-- Refresh tokens hashed in database (bcrypt)
-- `TrustedHostMiddleware` for host header validation
-- CORS restricted to `orbitiq-x.vercel.app`
-- Rate limiting: 100 req/min per client
-- All auth events logged to `audit_logs` table
-- `STRICT-TRANSPORT-SECURITY` header in production
-- `Content-Security-Policy: default-src 'none'` for API responses
+### Fixed — Critical Production Fixes (Phase 15A)
+- Nixpacks glibc/greenlet incompatibility → switched to Dockerfile builder
+- Alembic silent DDL rollback → AUTOCOMMIT isolation level
+- SQLAlchemy mapper `InvalidRequestError` → removed all cross-model string `primaryjoin`
+- Missing `ForeignKey` on `UserSession.user_id`
+- `bcrypt` + `passlib` version incompatibility → pinned `bcrypt<4.0.0`
+- 12 additional production defects resolved (see Phase 15A notes in git history)
 
 ---
 
 ## Repository
 
 GitHub: https://github.com/mahin-aeroai/ORBITIQ-X
-
----
-
-## Phase 16A — Neo4j Knowledge Graph — OPERATIONAL (2026-06-27)
-
-### Production Metrics (measured live)
-
-| Metric | Value |
-|---|---|
-| Neo4j Aura instance | `bff8c462.databases.neo4j.io` |
-| Total nodes | 29,248 |
-| Satellite nodes | 29,198 |
-| Reference nodes | 50 (OrbitalRegime×9, Agency×14, LaunchVehicle×15, LaunchSite×12) |
-| Total relationships | 29,198 |
-| Relationship type | ORBITS (Satellite→OrbitalRegime) |
-| LEO satellites | 25,285 |
-| MEO satellites | 1,665 |
-| GEO satellites | 1,535 |
-| HEO satellites | 713 |
-| KG health latency | ~610ms warm |
-| Neo4j status | healthy |
-| PostgreSQL status | healthy |
-| Scheduler status | running |
-| Platform overall | degraded (Redis unavailable — config task) |
-
-### Configuration Defects Resolved During Activation
-
-| Defect | Root Cause | Fix |
-|---|---|---|
-| `NEO4J_URI` ignored env var | `@property` always returned `bolt://localhost:7687` | Added `os.environ.get("NEO4J_URI")` check |
-| `NEO4J_DATABASE` wrong default | Defaulted to `"orbitiq"` — Aura uses instance ID | Changed to `"bff8c462"` |
-| `NEO4J_USER` not injecting | Railway env var not propagating to Pydantic field | Hardcoded default `"bff8c462"` |
-| Indentation error | GitHub web edit introduced extra space on `def` line | Fixed via local push |
-| Satellites table empty | Deployed code missing `53cc3c9` satellite upsert fix | Populated directly from TLE records via SQL |
-| No ORBITS relationships | `regime` property missing; OrbitalRegime matched on `name` not `orbitId` | Set regime from orbital params; matched on `orbitId` |
-
-### Phase 16B Readiness: GO
-
----
-
-## Phase 16B — GraphRAG (Qdrant Vector Store) — OPERATIONAL (2026-06-27)
-
-### Production Metrics (measured live)
-
-| Metric | Value |
-|---|---|
-| Qdrant cluster | `2435500e-5c7d-4182-b1ad-c3f0ca35a8a0.us-west-1-0.aws.cloud.qdrant.io` |
-| Collection | `aerospace_docs` |
-| RAG mode | `full_graphrag` |
-| RAG overall | healthy |
-| Neo4j nodes | 29,248 |
-| Qdrant available | true |
-| Vector store status | healthy |
-| GraphRAG status | healthy |
-| Live query latency | ~9–11 seconds (graph retrieval + Claude synthesis) |
-| Sample answer | "25,285 total tracked objects in LEO" — correct from live graph |
-
-### Defects Resolved During Phase 16B Activation
-
-| Defect | Fix | Commit |
-|---|---|---|
-| `qdrant-client` not in requirements | Added `qdrant-client==1.14.3` | `b1f2214` |
-| `rag/` not in Docker image | Added `COPY rag/ /app/rag/` to Dockerfile | `fdddbed` |
-| `rag/src` relative imports fail | Added `rag/` (not `rag/src/`) to sys.path | `b6f4353` |
-| `models/schemas.py` missing | Created with all 13 required types | `a2f3a14` |
-| `CNSA` missing from AgencyType | Added enum value | `d748d28` |
-| `MISSION_REPORT` etc missing from DocumentType | Added 7 missing values | `df0199f` |
-| `chunking/loaders.py` missing | Created stub re-exporting from ingestion | `760775e` |
-| `AerospaceRAGPipeline` wrong constructor | Fixed from `store=` to `qdrant_host=` | `b6f4353` |
-| `graphrag_bridge.py` `parents[5]` IndexError | Changed to `parents[3]` | `e8be7cf` |
-| `connection.py` `parents[4]` wrong | Changed to `parents[3]` | `ae6b78f` |
-| BGE-M3 embedder blocks startup | Replaced with lightweight Qdrant-only pipeline | `01a9c03` |
-| Analytics uses wrong relationship names | Added direct Cypher fallback with `ORBITS` | `8be46e4` |
-| `NEO4J_USER` env var not injecting | Hardcoded default `bff8c462` | `e3b385e` |
-
-### Platform Status After Phase 16B
-
-```
-RAG health:    overall=healthy  mode=full_graphrag
-neo4j:         healthy  node_count=29248
-qdrant:        available=true
-anthropic:     configured  model=claude-sonnet-4-6
-vector_store:  healthy
-graphrag:      healthy
-postgres:      healthy
-scheduler:     running
-```
-
----
-
-## Phase 16C — AI Mission Intelligence — OPERATIONAL (2026-06-27)
-
-### Production Metrics (measured live)
-
-| Metric | Value |
-|---|---|
-| Task status | complete |
-| Errors | 0 |
-| Agents invoked | orbital_dynamics, conjunction_analysis, space_debris, satellite_intelligence |
-| Agent parallelism | 4 agents ran concurrently via LangGraph Send API |
-| Total latency | ~96 seconds (4 parallel agents + Claude synthesis) |
-| Answer quality | Full aerospace situational awareness briefing |
-
-### Defects Resolved During Phase 16C Activation
-
-| Defect | Fix | Commit |
-|---|---|---|
-| `InvalidUpdateError: session_id` | Annotated immutable input fields with last-write-wins | `cf3e96d` |
-| `InvalidUpdateError: routing_decision` | Annotated all 19 plain scalar fields in OrbitalState | `b74263f` |
-| `InvalidUpdateError: safety_approved` | Fixed missed OrbitalState field (ManeuverRecommendation also has safety_approved) | `2053275` |
-
-### Full Stack Operational
-
-```
-PostgreSQL    → 29,198 satellites, 84,661 TLE records
-Neo4j         → 29,248 nodes, 29,198 ORBITS relationships
-Qdrant        → aerospace_docs collection (empty — ready for ingestion)
-LangGraph     → 7 specialist agents registered
-Claude        → claude-sonnet-4-6, full GraphRAG + agent synthesis
-GraphRAG mode → full_graphrag (Neo4j + Qdrant + Anthropic)
-Agent result  → ORBITIQ-X MISSION DIRECTOR BRIEFING with live orbital data
-```
-
----
-
-## Phase 16D — Aerospace Foundation Model — OPERATIONAL (2026-06-27)
-
-### Production Metrics (measured live)
-
-| Tier | Query | Latency | Result |
-|---|---|---|---|
-| Tier 1 — baseline | SGP4 explanation | 16,107ms | Full technical answer |
-| Tier 2 — graphrag | LEO population + conjunction risk | 11,947ms | 25,285 objects from live graph |
-| Tier 3 — agent | LEO vs GEO debris risk comparison | 24,407ms | Multi-agent analysis dispatched |
-
-### Foundation Model Status
-```
-status:             operational
-registered_models:  3
-benchmark_tasks:    17
-tiers_available:    baseline, graphrag, agent
-```
-
-### Full Platform Stack — OPERATIONAL
-
-| Component | Status | Detail |
-|---|---|---|
-| PostgreSQL | ✅ | 29,198 satellites, 84,661 TLE records |
-| Redis | ⚠️ | Unavailable (config task) |
-| Neo4j | ✅ | 29,248 nodes, 29,198 relationships |
-| Qdrant | ✅ | aerospace_docs collection |
-| LangGraph agents | ✅ | 7 specialist agents |
-| GraphRAG | ✅ | full_graphrag mode |
-| Foundation Model | ✅ | 3 tiers, 17 benchmark tasks |
-| Claude | ✅ | claude-sonnet-4-6 |

@@ -1,148 +1,140 @@
-# ORBITIQ-X Release Candidate — v0.1.0
+# ORBITIQ-X Release Candidate — v0.4.0
 
-**Aerospace Foundation Model for Space Intelligence**
+**The Aerospace Intelligence Platform — Knowledge Engineering Phase**
 
-> Production readiness checklist. All items must be ✅ before deployment.
+---
+
+## Release Summary
+
+v0.4.0 marks the transition from Platform Engineering to Knowledge Engineering.
+The infrastructure is stable and operational. This release establishes the
+Canonical Aerospace Entity Model (CAEM) as the foundation for the
+Aerospace Knowledge Universe.
 
 ---
 
 ## Platform Status
 
-| Domain | Status | Tests |
+| Domain | Status |
+|---|---|
+| Infrastructure & APIs | ✅ Operational |
+| SSA Backend | ✅ Operational — 29,198 satellites |
+| Orbital Digital Twin | ✅ Operational |
+| Conjunction Engine | ✅ Operational |
+| Mission Control Dashboard | ✅ Operational |
+| Authentication & RBAC | ✅ Operational |
+| Neo4j Knowledge Graph | ✅ 29,248 nodes, 118,681 relationships |
+| Qdrant GraphRAG | ✅ `full_graphrag` mode, 185 chunks |
+| AI Agents (LangGraph) | ✅ 7 agents, 4-agent parallel execution |
+| Foundation Model | ✅ 3 tiers, 17 benchmark tasks |
+| **CAEM — Phase 17.1** | ✅ Complete |
+
+---
+
+## v0.4.0 Deliverables
+
+### New: Canonical Aerospace Entity Model
+
+| Component | File | Lines |
 |---|---|---|
-| Infrastructure & APIs | ✅ 100% | — |
-| SSA Backend | ✅ 100% | Covered |
-| Orbital Digital Twin | ✅ 100% | Covered |
-| Conjunction Engine | ✅ 100% | Covered |
-| Mission Control Dashboard | ✅ 99% | — |
-| Authentication & RBAC | ✅ 100% | 46 tests |
-| Observability & Monitoring | ✅ 100% | 36 tests |
-| Failure Resilience | ✅ 100% | 23 tests |
-| Alert Publishing Pipeline | ✅ 100% | 13 tests |
-| **Total** | **99%** | **118/118 passing** |
+| Base entity + AQID + provenance | `backend/app/caem/base.py` | 397 |
+| 31 extension schemas | `backend/app/caem/entities.py` | 418 |
+| 76 relationship types + Cypher | `backend/app/caem/relationships.py` | 392 |
+| Neo4j schema initializer | `backend/app/caem/graph/neo4j_schema.py` | 263 |
+| 7-stage ingestion pipeline | `backend/app/caem/ingestion/pipeline.py` | 497 |
+| 9 REST endpoints | `backend/app/api/v1/endpoints/entities.py` | 487 |
+| Alembic migration (6 tables) | `backend/alembic/versions/20260628_0011_caem_base_entities.py` | 221 |
+| Package exports | `backend/app/caem/__init__.py` | 65 |
+| **Total** | | **2,740 lines** |
+
+### Migration Chain
+```
+0001 → 0002 → ... → 0010_add_fk_user_sessions → 0011_caem_base_entities ✅ HEAD
+```
 
 ---
 
-## Pre-Deployment Checklist
+## Architecture Validation
 
-### 🔐 Security
-
-- [ ] `ORBITIQ_SECRET_KEY` set to 64-char random (never `CHANGE_ME`)
-  ```bash
-  openssl rand -hex 32
-  ```
-- [ ] All `CHANGE_ME` values in `.env` replaced with production secrets
-- [ ] `POSTGRES_PASSWORD` ≥ 20 chars, not shared with any other service
-- [ ] `REDIS_PASSWORD` set and TLS configured if over network
-- [ ] `NEO4J_PASSWORD` changed from default
-- [ ] `GRAFANA_ADMIN_PASSWORD` changed from default
-- [ ] `WEAVIATE_API_KEY` set (not empty)
-- [ ] `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are valid and rate-limited
-- [ ] `BACKEND_CORS_ORIGINS` set to exact production frontend domain
-- [ ] JWT `BACKEND_JWT_EXPIRE_MINUTES` ≤ 60 (do not increase for prod)
-- [ ] TLS certificate installed and valid (check expiry)
-- [ ] `ORBITIQ_ENV=production` in `.env` (enables HSTS, TrustedHost middleware)
-- [ ] `BACKEND_RELOAD=false` in production
-- [ ] `.env` file not committed to git (`git status` shows no .env)
-- [ ] `TRUSTED_HOSTS` set to actual production hostname
-
-### 🗄️ Database
-
-- [ ] PostgreSQL migrations applied: `python migrate.py upgrade head`
-- [ ] Migration status verified: `python migrate.py status`
-- [ ] PostgreSQL `max_connections` ≥ 200 (4 workers × 20 pool + headroom)
-- [ ] PostgreSQL WAL archiving enabled for PITR
-- [ ] Redis `appendonly yes` and `appendfsync everysec` in redis.conf
-- [ ] Neo4j backup plugin configured
-- [ ] First backup completed and restore tested
-
-### 🏗️ Infrastructure
-
-- [ ] Docker resource limits set in `docker-compose.prod.yml`
-- [ ] All health checks passing: `./deployment/scripts/health-check.sh`
-- [ ] `GET /health` returns `{"status": "operational"}`
-- [ ] `GET /api/v1/platform/health` returns `{"overall": "healthy"}`
-- [ ] Prometheus scraping metrics: `http://localhost:9090/targets`
-- [ ] Grafana dashboard visible and showing data
-- [ ] Alert rules loaded: `http://localhost:9090/rules`
-
-### 🔄 CI/CD
-
-- [ ] GitHub Actions CI passes on `main` branch
-- [ ] Docker image builds succeed
-- [ ] Security scan shows no HIGH/CRITICAL CVEs in direct dependencies
-- [ ] TypeScript: 0 errors
-- [ ] Next.js build: ✓ 9/9 pages
-
-### 📊 Observability
-
-- [ ] Structured logs emitting JSON in production
-- [ ] OpenTelemetry traces visible in collector (or console in dev)
-- [ ] Prometheus metrics exposed at `/metrics`
-- [ ] Alert rules loaded (15 rules across 4 groups)
-- [ ] PagerDuty / Slack alertmanager integration configured (if applicable)
-- [ ] `/api/v1/platform/health` endpoint accessible
-- [ ] System Status page loads (`/system`)
-
-### 🛡️ Auth & RBAC
-
-- [ ] First admin user created via bootstrap: `POST /api/v1/auth/register`
-- [ ] Login tested end-to-end from browser
-- [ ] Role-based nav working (analyst cannot see Foundation)
-- [ ] JWT refresh working (check browser 401 → auto-refresh → retry)
-- [ ] Account lockout after 5 failed logins tested
-- [ ] Logout revokes refresh token (POST /api/v1/auth/logout)
-
-### 💾 Backup & Recovery
-
-- [ ] Backup script executable: `chmod +x deployment/scripts/backup.sh`
-- [ ] Test backup runs: `./deployment/scripts/backup.sh --dry-run`
-- [ ] Production backup verified: `./deployment/scripts/backup.sh`
-- [ ] Restore procedure tested from backup (see `docs/OPERATIONS/BACKUP_RESTORE.md`)
-- [ ] Cron job configured: `0 2 * * * /opt/orbitiq/deployment/scripts/backup.sh`
-- [ ] Backup storage is offsite (S3, GCS, or external NAS)
-- [ ] Retention policy: 30-day rolling window
-
-### 📡 External API Integrations
-
-- [ ] Space-Track credentials configured (`SPACETRACK_IDENTITY`, `SPACETRACK_PASSWORD`)
-- [ ] Initial catalog sync successful: `POST /api/v1/catalog/sync/trigger`
-- [ ] TLE data visible: `GET /api/v1/catalog/health`
-- [ ] Digital twin propagation running: `GET /api/v1/digital-twin/status`
-- [ ] NOAA SWPC reachable: `GET /api/v1/space-weather/health`
-- [ ] NASA API key set (optional: `NASA_API_KEY`)
-
-### 📖 Documentation
-
-- [ ] `docs/OPERATIONS/DEPLOYMENT.md` reviewed
-- [ ] `docs/OPERATIONS/RUNBOOK.md` accessible to ops team
-- [ ] `docs/OPERATIONS/INCIDENT_RESPONSE.md` shared with on-call
-- [ ] Admin user credentials stored in team password manager
-- [ ] On-call rotation configured
+| Check | Result |
+|---|---|
+| All 39 entity classes produce valid AQIDs | ✅ |
+| All 31 extension schemas validate correctly | ✅ |
+| All 76 relationship types enumerated | ✅ |
+| `AerospaceRelationship.validate()` passes for valid relationships | ✅ |
+| Cypher MERGE statement generated correctly | ✅ |
+| Confidence scoring: 3-source official + human_verified → 0.94 | ✅ |
+| Confidence scoring: 1 community + unverified → 0.50 | ✅ |
+| `BaseAerospaceEntity` instantiation, version push, source add | ✅ |
+| `to_neo4j_node()` returns correct minimal property set | ✅ |
+| `to_qdrant_payload()` returns correct metadata fields | ✅ |
 
 ---
 
-## Recovery Time Objectives
+## Deployment Checklist
 
-| Scenario | RTO | Procedure |
+### Pre-Deploy
+- [ ] `down_revision` in migration `0011` points to `20260626_0010_add_fk_user_sessions` ✅
+- [ ] Migration naming follows `YYYYMMDD_NNNN_description.py` convention ✅
+- [ ] No new environment variables required by Phase 17.1
+- [ ] `backend/app/caem/` package imports cleanly
+
+### Deploy
+- [ ] `python migrate.py upgrade head` — applies migration `0011`
+- [ ] Run `initialize_neo4j_schema(driver)` once to create Neo4j constraints
+- [ ] Mount CAEM router in `main.py`: `app.include_router(entities_router)`
+- [ ] Wire three dependency stubs in `entities.py` to existing session factories
+
+### Post-Deploy
+- [ ] `GET /api/v2/entities` returns 200
+- [ ] `POST /api/v2/entities` creates entity and returns AQID
+- [ ] `GET /api/v2/entities/{aqid}/neighborhood` returns Neo4j graph data
+- [ ] `GET /api/v2/entities/search/fulltext?q=spacex` returns results
+
+---
+
+## Integration Instructions
+
+### 1. Mount the router (`backend/app/main.py`)
+```python
+from app.api.v1.endpoints.entities import router as caem_router
+app.include_router(caem_router)
+```
+
+### 2. Wire the dependency stubs (`backend/app/api/v1/endpoints/entities.py`)
+Replace the three stub functions with your existing factories:
+```python
+def get_pg_session():
+    return get_session()          # your existing session dependency
+
+def get_neo4j_driver():
+    return get_neo4j()            # your existing Neo4j dependency
+
+def require_viewer():
+    return Depends(verify_token)  # your existing JWT dependency
+```
+
+### 3. Run Neo4j schema init (once)
+```python
+from app.caem.graph.neo4j_schema import initialize_neo4j_schema
+initialize_neo4j_schema(neo4j_driver)
+```
+
+### 4. Apply migration
+```bash
+python migrate.py upgrade head
+```
+
+---
+
+## Known Non-Critical Items
+
+| Item | Impact | Resolution |
 |---|---|---|
-| Backend pod crash | < 30s | Docker restart=always |
-| Redis unavailable | < 2min | Graceful degradation; no data loss |
-| Neo4j unavailable | < 5min | Graph features degrade; SSA continues |
-| PostgreSQL unavailable | ~10min | Restore from backup |
-| Full host failure | ~30min | Restore from backup + re-deploy |
+| Redis unavailable | SSE alerts degraded, pub/sub disabled | Non-blocking — configure REDIS_URL |
+| Qdrant collection empty | GraphRAG returns sparse results | Populate via knowledge ingestion in Phase 17.4 |
 
 ---
 
-## Sign-Off
-
-| Role | Name | Date | Signature |
-|---|---|---|---|
-| Lead Engineer | Mahin Nandipa | | |
-| Security Review | | | |
-| Ops Lead | | | |
-
----
-
-*Generated: Phase 14C — Deployment Hardening & Release Candidate*
-*Platform: ORBITIQ-X v0.1.0 | Build: d099ec1*
+*Generated: Phase 17.1 — Canonical Aerospace Entity Model*
+*Platform: ORBITIQ-X v0.4.0 | Commit: 8d24e04*

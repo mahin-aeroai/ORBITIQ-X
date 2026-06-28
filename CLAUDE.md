@@ -7,30 +7,94 @@ Read this before making any changes. Update this file when the engineering focus
 
 ## Project Overview
 
-ORBITIQ-X is a private full-stack aerospace intelligence platform.
+ORBITIQ-X is a production-grade Aerospace Intelligence Platform evolving into the
+**Aerospace Knowledge Universe (AKU)** — the "Bloomberg Terminal for Aerospace."
 
 **Architecture:**
 - **Backend:** FastAPI + PostgreSQL (Railway) + Redis + APScheduler
 - **Frontend:** Next.js 14 (Vercel) with App Router
-- **AI:** LangGraph agents + Claude claude-sonnet-4-6 + RAG pipeline
+- **AI:** LangGraph agents (7) + Claude claude-sonnet-4-6 + GraphRAG pipeline
 - **Orbital:** sgp4 propagation, Space-Track TLE ingestion, conjunction CDM screening
-- **Graph:** Neo4j knowledge graph (operator/satellite/country relationships)
+- **Graph:** Neo4j Aura knowledge graph (29,248 nodes, 118,681 relationships)
+- **Vector:** Qdrant Cloud (`aerospace_docs` collection, 185 chunks)
+- **Knowledge:** CAEM — Canonical Aerospace Entity Model (`backend/app/caem/`)
 
-**Repository:** `mahin-aeroai/ORBITIQ-X`  
-**Backend:** https://orbitiq-x-production.up.railway.app  
-**Frontend:** https://orbitiq-x.vercel.app  
+**Repository:** `mahin-aeroai/ORBITIQ-X`
+**Backend:** https://orbitiq-x-production.up.railway.app
+**Frontend:** https://orbitiq-x.vercel.app
 **API Docs:** https://orbitiq-x-production.up.railway.app/api/v1/docs
+
+---
+
+## Current Phase
+
+**Phase 17 — Knowledge Engineering**
+
+Platform infrastructure is complete and stable. All future work expands the
+Aerospace Knowledge Universe. Do not redesign stable infrastructure.
+
+**Completed:** Phase 17.1 — Canonical Aerospace Entity Model (CAEM)
+**Active:** Phase 17.2 — Universal Relationship Ontology
+**Next:** Phase 17.3 — Provenance and Versioning
 
 ---
 
 ## Engineering Principles
 
 1. **Evidence-based debugging only.** Never guess. Read logs, run tests, check the actual error before proposing a fix.
-2. **No speculative fixes.** If the root cause is not confirmed, say so. Do not apply changes hoping they might work.
+2. **No speculative fixes.** If the root cause is not confirmed, say so.
 3. **Minimal targeted changes.** Fix the specific failure. Do not refactor surrounding code.
-4. **Preserve existing architecture.** The database schema, API contracts, and middleware stack are stable. Do not restructure unless a verified defect requires it.
-5. **Production quality.** Every commit must work in production, not just locally.
-6. **Verify before declaring success.** Run tests, check logs, confirm the fix resolves the reported issue.
+4. **Preserve existing architecture.** The database schema, API contracts, and middleware stack are stable.
+5. **Extension over replacement.** Add to CAEM entity schemas and Neo4j relationships. Never redesign them.
+6. **Production quality.** Every commit must work in production.
+7. **Verify before declaring success.** Run tests, check logs, confirm resolution.
+8. **Knowledge first.** Every new capability must integrate into the Aerospace Knowledge Graph.
+
+---
+
+## CAEM — Critical Architecture (Phase 17.1)
+
+The Canonical Aerospace Entity Model lives at `backend/app/caem/`. Read this before touching any entity-related code.
+
+### AQID System
+Every entity has an immutable AQID: `AQID-{CLASS}-{SLUG}`
+```python
+from caem import generate_aqid, validate_aqid, EntityClass
+aqid = generate_aqid(EntityClass.COMPANY, "SpaceX")  # → "AQID-COMPANY-SPACEX"
+```
+- AQIDs are **never changed** after creation
+- Display names are attributes, not identifiers
+- External IDs (NORAD, COSPAR, DOI) live in `entity_aliases` table
+
+### Four-Layer Architecture
+Every entity exists across four layers simultaneously:
+| Layer | System | What lives here |
+|---|---|---|
+| Master Data | PostgreSQL `aerospace_entities` | All entity fields, extension_data JSONB |
+| Relationships | Neo4j | Typed directed edges with temporal properties |
+| Knowledge | Qdrant `aerospace_docs` | Embedded chunks for semantic retrieval |
+| Intelligence | Frontend entity pages | AI summaries, graph explorer, timeline |
+
+### Extension Pattern
+Entity-class-specific fields go in `extension_data` JSONB, validated by Pydantic extension models:
+```python
+from caem.entities import validate_extension
+validated = validate_extension(EntityClass.LAUNCH_VEHICLE, {"payload_leo_kg": 22800, ...})
+```
+Never add entity-class columns to `aerospace_entities`. Always use `extension_data`.
+
+### Relationship Types
+All 76 relationship types are in `caem.relationships.RelationshipType`.
+Never invent new relationship type strings. Use the enum.
+```python
+from caem.relationships import RelationshipType, AerospaceRelationship
+rel = AerospaceRelationship(
+    source_aqid="AQID-SATELLITE-ISS",
+    target_aqid="AQID-GOV-AGENCY-NASA",
+    relationship_type=RelationshipType.OPERATED_BY,
+    confidence=0.99,
+)
+```
 
 ---
 
@@ -40,98 +104,102 @@ ORBITIQ-X is a private full-stack aerospace intelligence platform.
 - **Logging:** structlog with structured JSON fields — never use `print()` in production code
 - **Database:** SQLAlchemy async session via `get_session` dependency, Alembic for all schema changes
 - **Migrations:** Every schema change needs a numbered migration in `backend/alembic/versions/`
-- **API:** FastAPI with Pydantic request/response models, `JSONResponse` (not `ORJSONResponse` — deprecated)
-- **Frontend:** TypeScript strict mode, Next.js App Router patterns, TanStack Query for data fetching
-- **Relationships:** Do NOT use string `primaryjoin` references across models — causes `InvalidRequestError` at mapper config time
+  - Naming: `YYYYMMDD_NNNN_description.py`
+  - Always set `down_revision` to the previous migration's revision ID
+  - Always use `AUTOCOMMIT` for Railway PostgreSQL (see Known Pitfalls)
+- **API:** FastAPI with Pydantic request/response models, `JSONResponse` (not `ORJSONResponse`)
+- **Frontend:** TypeScript strict mode, Next.js App Router patterns, TanStack Query
 
 ---
 
-## Current Phase
+## Known Pitfalls (Verified Production Failures)
 
-**Phase 15B — Operational Configuration**
+These have caused real production outages. Do not repeat them.
 
-Platform is live. Configuring external integrations to activate full capabilities.
-
-## Current Priority
-
-**Space-Track catalog sync** → first satellite data → Digital Twin activation → conjunction screening live
-
----
-
-## Known Issues (Verified)
-
-| Issue | Root Cause | Status |
+| Pitfall | Consequence | Rule |
 |---|---|---|
-| Redis UNAVAILABLE | `REDIS_URL` not injecting correctly from Railway plugin | Open |
-| Neo4j UNAVAILABLE | Credentials not configured | Open — needs Aura account |
-| Digital Twin NOT INIT | No satellites in catalog (Space-Track not synced yet) | Resolves with catalog sync |
-| Unit test failures (68) | Test environment mock configuration, not production bugs | Low priority |
+| String `primaryjoin` across models | `InvalidRequestError` on every request | Never use string cross-model `primaryjoin` |
+| Alembic without AUTOCOMMIT on Railway | Silent DDL rollback — tables never created | Always use `AUTOCOMMIT` isolation level in migrations |
+| `parents[4]` in Docker path | `IndexError` in agent service | Docker has 3 parent levels, not 4 |
+| `ORJSONResponse` | Deprecated, causes import errors | Use `JSONResponse` |
+| `bcrypt>=4.0.0` with passlib 1.7.4 | `AttributeError: __about__` | Pin `bcrypt<4.0.0` |
+| Cesium + webpack Terser | Build failure | Cesium replaced with pure SVG globe |
+| Cross-model string FK reference | Mapper config crash | Always import model classes directly |
+| Neo4j default database `orbitiq` | Connection failure on Aura | Aura uses instance ID as database name |
+| `parents[5]` in graphrag_bridge | `IndexError` | Use `parents[3]` in Docker environment |
 
 ---
 
-## Completed Milestones
+## Database Migration Rules
 
-- **Phases 1–12:** Full backend — auth, SSA, digital twin, conjunction, missions, knowledge graph, RAG, agents
-- **Phases 13–14:** Full Next.js frontend — Mission Control dashboard, Cesium globe, SSE alerts
-- **Phase 14D:** Release readiness audit — 8 findings resolved, 557 tests passing
-- **Phase 15A:** Production deployment — Railway backend, Vercel frontend, full auth flow working
+```python
+# ALWAYS in Railway migrations:
+from alembic import op
 
----
-
-## Deployment
-
-**Backend (Railway):**
-- Builder: Dockerfile (`backend/Dockerfile.railway`)
-- Entrypoint: `backend/entrypoint.sh` — parses `DATABASE_URL`, runs Alembic, starts gunicorn
-- Key vars: `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `ORBITIQ_SECRET_KEY`
-
-**Frontend (Vercel):**
-- Framework: Next.js 14
-- Key var: `NEXT_PUBLIC_API_URL=https://orbitiq-x-production.up.railway.app` (WITHOUT `/api/v1` suffix)
-- Auth: HttpOnly cookie (`orbitiq_refresh`) + in-memory access token
-
-**Database:**
-- Migrations use `AUTOCOMMIT` isolation level (required — default SQLAlchemy transaction wrapping causes silent rollback on Railway PostgreSQL 18)
-- Always run `python migrate.py upgrade head` before starting the server
-
----
-
-## Testing Policy
-
-1. Run `python -m pytest backend/tests/unit/ --asyncio-mode=auto -q` before any backend commit
-2. Run `npm run build` in `frontend/` before any frontend commit — TypeScript errors fail the Vercel build
-3. Never claim a fix works without log evidence or test output
-4. Integration tests require live DB — use Railway Console for production verification
-
----
-
-## Commit Policy
-
-Every commit must include:
-- **Purpose:** What problem this solves
-- **Files changed:** Which files were modified and why
-- **Validation:** What test or log confirms the fix works
-
-Example:
-```
-fix: use COUNT(*) for first-user check instead of fetching all users
-
-COUNT(*) is O(1) on indexed table. Previous implementation fetched all
-rows into memory causing timeout on large datasets.
-
-Files: backend/app/api/v1/endpoints/auth.py
-Validated: POST /api/v1/auth/register returns 201 in Railway deploy logs
+def upgrade():
+    # Get connection with AUTOCOMMIT
+    connection = op.get_bind()
+    connection.execute(sa.text("SET LOCAL synchronous_commit = ON"))
+    
+    # GIN indexes MUST use op.execute(), NOT op.create_index()
+    op.execute("CREATE INDEX ix_ae_tags ON aerospace_entities USING GIN (tags)")
+    
+    # Never use op.create_index() for GIN — it wraps in transaction
 ```
 
 ---
 
-## Do Not
+## Infrastructure Details
 
-- Introduce `Math.random()` or non-deterministic values in Next.js server components (causes hydration mismatch)
-- Use `ORJSONResponse` — deprecated in FastAPI 0.115+, use `JSONResponse`
-- Use string `primaryjoin` in SQLAlchemy relationships without importing all referenced classes
-- Wrap Alembic migrations in `context.begin_transaction()` — causes silent DDL rollback on PostgreSQL
-- Set `search_path` via asyncpg URL query params — not supported by asyncpg driver
-- Import React class `Component` in Next.js server components (`"use server"` or no directive)
-- Use `bcrypt>=4.0.0` with `passlib==1.7.4` — incompatible, pin `bcrypt<4.0.0`
-- Hardcode `parents[4]` path traversal — breaks in Docker where directory depth differs from local dev
+| Service | Connection | Notes |
+|---|---|---|
+| PostgreSQL | Railway plugin | `DATABASE_URL` env var, asyncpg driver |
+| Neo4j | `bff8c462.databases.neo4j.io` | Database: `bff8c462`, User: `bff8c462` |
+| Qdrant | `2435500e-...aws.cloud.qdrant.io` | Collection: `aerospace_docs` |
+| Redis | Railway plugin | Non-critical — platform degrades gracefully |
+| Space-Track | `www.space-track.org` | `SPACETRACK_IDENTITY` + `SPACETRACK_PASSWORD` |
+| Anthropic | API | `ANTHROPIC_API_KEY`, model: `claude-sonnet-4-6` |
+
+---
+
+## Current Platform Metrics
+
+| Metric | Value |
+|---|---|
+| Satellites | 29,198 |
+| Neo4j nodes | 29,248 |
+| Neo4j relationships | 118,681 |
+| Qdrant chunks | 185 |
+| API endpoints | 112 |
+| Alembic migrations | 11 (head: `20260628_0011`) |
+| CAEM entity classes | 39 |
+| CAEM relationship types | 76 |
+
+---
+
+## Phase 17 Roadmap
+
+| Sub-Phase | Scope | Status |
+|---|---|---|
+| 17.1 | Canonical Aerospace Entity Model | ✅ Complete |
+| 17.2 | Universal Relationship Ontology | 🔄 Next |
+| 17.3 | Provenance and Versioning | Planned |
+| 17.4 | Knowledge Ingestion Framework | Planned |
+| 17.5 | Reusable Entity Intelligence Pages | Planned |
+| 17.6 | Cross-Entity Navigation | Planned |
+| 17.7 | Business Intelligence Layer | Planned |
+| 17.8 | Historical Intelligence Layer | Planned |
+| 17.9 | Scientific Knowledge Layer | Planned |
+| 17.10 | Aerospace Knowledge Universe v1 | Planned |
+
+---
+
+## What NOT to Do
+
+- Do not redesign PostgreSQL schema, FastAPI routers, or Neo4j connection layer
+- Do not add entity-class-specific columns to `aerospace_entities` — use `extension_data` JSONB
+- Do not create new relationship type strings — use `RelationshipType` enum
+- Do not store full entity data in Neo4j nodes — only graph traversal properties
+- Do not bypass AQID validation — every AQID must pass `validate_aqid()`
+- Do not build isolated pages — every new page integrates into the Knowledge Graph
+- Do not ignore provenance — every fact needs a `ProvenanceRecord`
