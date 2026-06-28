@@ -144,7 +144,7 @@ export const fetchCatalogStatus = (): Promise<CatalogStatus> =>
 
 
 // ─── Space Weather (SpaceWeatherWidget) ───────────────────────────────────────
-// Endpoint: GET /api/v1/digital-twin/weather
+// Endpoint: GET /api/v1/space-weather/current
 // Source:   digital_twin.py → get_space_weather()
 
 export interface SpaceWeatherData {
@@ -163,7 +163,7 @@ export interface SpaceWeatherData {
 }
 
 export const fetchSpaceWeather = (): Promise<SpaceWeatherData> =>
-  apiFetch<SpaceWeatherData>("/digital-twin/weather");
+  apiFetch<SpaceWeatherData>("/space-weather/current");
 
 
 // ─── High-Risk Conjunctions (ConjunctionAlertPanel) ──────────────────────────
