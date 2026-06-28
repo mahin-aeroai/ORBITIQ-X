@@ -481,13 +481,35 @@ def _compute_regime(perigee_km, apogee_km, inclination_deg, stored_regime):
     if alt <= 36500:  return "GEO"
     return "HEO"
 
-def _normalize_type(raw: str) -> str:
-    """Normalise DB object_type to frontend-friendly uppercase."""
+def _normalize_type(raw: str, name: str = "", cospar: str = "") -> str:
+    """Normalise DB object_type to frontend-friendly uppercase.
+    When DB value is unknown/TBA, infer from name and COSPAR patterns."""
     r = (raw or "unknown").lower().strip()
-    if r in ("satellite", "payload"):    return "PAYLOAD"
-    if r in ("debris",):                 return "DEBRIS"
+    if r in ("satellite", "payload"):              return "PAYLOAD"
+    if r in ("debris",):                           return "DEBRIS"
     if r in ("rocket_body", "r/b", "rocket body"): return "ROCKET_BODY"
-    return "UNKNOWN"
+
+    # DB is UNKNOWN or TBA — infer from name patterns
+    n = (name or "").upper()
+    c = (cospar or "").upper()
+
+    # Debris indicators in name
+    if any(x in n for x in ("DEB", "DEBRIS", "FRAG", "R/B", "ROCKET", "STAGE",
+                              "ULLAGE", "SHROUD", "ADAPTOR", "ADAPTER", "PLATFORM",
+                              "COOLANT", "TANK")):
+        if any(x in n for x in ("R/B", "ROCKET", "STAGE", "ULLAGE")):
+            return "ROCKET_BODY"
+        return "DEBRIS"
+
+    # COSPAR piece indicator — letters beyond 'A' often indicate debris
+    # e.g. 1970-025B = rocket body, 1970-025C+ = debris
+    if c and len(c) >= 8:
+        piece = c.split("-")[-1] if "-" in c else ""
+        if len(piece) == 1 and piece == "A":   return "PAYLOAD"
+        if len(piece) == 1 and piece == "B":   return "ROCKET_BODY"
+        if len(piece) >= 1 and piece > "B":    return "DEBRIS"
+
+    return "PAYLOAD"  # default: assume payload
 
 @router.get(
     "/satellites",
@@ -506,16 +528,10 @@ async def list_satellites(
     from sqlalchemy import text
     from app.db.models.satellites import Satellite
 
-    # Map frontend type tokens → DB values
-    TYPE_MAP = {
-        "PAYLOAD":     ["satellite", "payload"],
-        "SAT":         ["satellite", "payload"],
-        "DEBRIS":      ["debris"],
-        "DEB":         ["debris"],
-        "ROCKET_BODY": ["rocket_body"],
-        "RB":          ["rocket_body"],
-        "UNKNOWN":     ["unknown", "tba"],
-    }
+    # NOTE: All objects currently have object_type = 'UNKNOWN' or 'TBA'
+    # because the catalog sync stores TLE data only. Type is inferred from
+    # COSPAR ID patterns and name heuristics when DB value is not set.
+    # Type filter is applied post-query after inference.
 
     # Build base query — always fetch orbital elements so we can compute regime
     q = select(
@@ -534,12 +550,7 @@ async def list_satellites(
         Satellite.cospar_id,
     )
 
-    # Type filter (against DB lowercase values)
     type_upper = (type or "ALL").upper()
-    if type_upper not in ("ALL", ""):
-        db_vals = TYPE_MAP.get(type_upper)
-        if db_vals:
-            q = q.where(Satellite.object_type.in_(db_vals))
 
     # Search filter
     if search and search.strip():
@@ -562,8 +573,10 @@ async def list_satellites(
     regime_upper = (regime or "ALL").upper()
     needs_regime_filter = regime_upper not in ("ALL", "")
 
-    if not needs_regime_filter:
-        # Can use DB-level pagination
+    needs_type_filter = type_upper not in ("ALL", "")
+
+    if not needs_regime_filter and not needs_type_filter:
+        # Pure DB-level pagination — fastest path
         count_q = select(func.count()).select_from(q.subquery())
         total_result = await session.execute(count_q)
         total = total_result.scalar() or 0
@@ -574,19 +587,22 @@ async def list_satellites(
         for r in rows:
             d = dict(r)
             d["regime"]      = _compute_regime(d.get("perigee_km"), d.get("apogee_km"), d.get("inclination_deg"), d.get("regime"))
-            d["object_type"] = _normalize_type(d.get("object_type", "unknown"))
+            d["object_type"] = _normalize_type(d.get("object_type","unknown"), d.get("name",""), d.get("cospar_id",""))
             objects.append(d)
     else:
-        # Fetch all matching rows, filter by computed regime, then paginate
+        # Fetch all matching rows, filter by computed regime/type, then paginate
         result = await session.execute(q)
         all_rows = result.mappings().all()
         objects_all = []
         for r in all_rows:
             d = dict(r)
             d["regime"]      = _compute_regime(d.get("perigee_km"), d.get("apogee_km"), d.get("inclination_deg"), d.get("regime"))
-            d["object_type"] = _normalize_type(d.get("object_type", "unknown"))
-            if d["regime"] == regime_upper:
-                objects_all.append(d)
+            d["object_type"] = _normalize_type(d.get("object_type","unknown"), d.get("name",""), d.get("cospar_id",""))
+            if needs_regime_filter and d["regime"] != regime_upper:
+                continue
+            if needs_type_filter and d["object_type"] != type_upper:
+                continue
+            objects_all.append(d)
         total = len(objects_all)
         start = page * min(limit, 500)
         objects = objects_all[start : start + min(limit, 500)]
