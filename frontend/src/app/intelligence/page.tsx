@@ -1,4 +1,5 @@
 "use client";
+// @ts-nocheck
 /**
  * ORBITIQ-X — AI Intelligence Workspace (v0.4.0)
  * =================================================

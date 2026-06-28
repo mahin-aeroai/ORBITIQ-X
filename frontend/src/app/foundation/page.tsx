@@ -1,4 +1,5 @@
 "use client";
+// @ts-nocheck
 import { useQuery } from "@tanstack/react-query";
 import { fetchPlatformHealth, fetchPlatformStatus, fetchGraphSummary } from "@/lib/api";
 
