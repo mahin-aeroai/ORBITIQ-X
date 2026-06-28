@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision      = '20260628_0012_relationship_ontology'
-down_revision = '017_01_caem_base'
+down_revision = '20260628_0011_caem_base_entities'
 branch_labels = None
 depends_on    = None
 

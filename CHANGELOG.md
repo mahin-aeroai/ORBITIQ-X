@@ -18,6 +18,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0-dev] — Phase 17.2 — Universal Relationship Ontology
+
+### Added
+
+#### Relationship Ontology (`backend/app/caem/ontology/`)
+- `relationship_registry.py` — `RelationshipDefinition` dataclass with formal specification for all 76 relationship types:
+  - Cardinality rules: `ONE_TO_ONE` / `ONE_TO_MANY` / `MANY_TO_ONE` / `MANY_TO_MANY`
+  - Allowed source and target entity class sets (enforced at ingestion + API)
+  - Temporal semantics: 52 of 76 types carry meaningful `since`/`until` properties
+  - Bidirectional flag: 5 relationship types stored in both directions automatically
+  - Confidence floor per type (0.50–0.85 range by category)
+  - Display and inverse labels for frontend graph edges
+  - Full lookup helpers: `get_definition()`, `validate_relationship_classes()`, `get_relationships_for_class()`, `get_category_relationships()`, `get_temporal_relationships()`, `get_bidirectional_relationships()`
+  - Runtime coverage check: raises `RuntimeError` if any `RelationshipType` is unregistered
+
+#### Neo4j Graph Schema (`backend/app/caem/graph/neo4j_relationship_schema.py`)
+- Relationship property constraints on `OPERATED_BY`, `LAUNCHED_BY`, `FUNDED_BY`
+- Confidence and `is_current` indexes on `OPERATED_BY` for fast filtering
+- Full-text index on relationship `notes` and `citation_text`
+- `TEMPORAL_SNAPSHOT_CYPHER`: point-in-time relationship query (since/until filtering)
+- `BULK_RELATIONSHIP_UPSERT_TEMPLATE`: UNWIND-based batch upsert per relationship type
+- `TRAVERSAL_LIBRARY`: 11 named graph traversal patterns for the Graph Agent:
+  `operator_satellites`, `launch_vehicle_missions`, `country_space_assets`,
+  `technology_lineage`, `paper_citation_network`, `supply_chain_full`,
+  `organization_influence`, `mission_full_graph`, `constellation_members`,
+  `risk_adjacency`, `standard_compliance_map`
+- `OPERATED_BY` population utilities: `POSTGRES_OPERATOR_FETCH`, `OPERATED_BY_FROM_NORAD`, `OPERATED_BY_BATCH_FROM_SATCAT` (ready for Phase 17.3 data population)
+- `initialize_relationship_schema()`, `get_temporal_snapshot()`, `bulk_upsert_relationships()`
+
+#### New API Endpoints (`backend/app/api/v1/endpoints/relationships.py`)
+- `GET    /api/v2/relationships/ontology` — Full registry (76 types), filterable by category/temporal
+- `GET    /api/v2/relationships/ontology/categories` — Category summary with counts
+- `GET    /api/v2/relationships/ontology/{rel_type}` — Single type formal definition
+- `POST   /api/v2/relationships/validate` — Validate entity class compatibility before creating
+- `POST   /api/v2/relationships` — Create relationship (Neo4j + PostgreSQL cache + audit log)
+- `GET    /api/v2/relationships/{source_aqid}` — Entity relationships (filterable by direction/category/type/confidence)
+- `DELETE /api/v2/relationships/{rel_id}` — Soft-delete (is_current=False; never hard-deleted)
+- `GET    /api/v2/relationships/snapshot/{aqid}` — Point-in-time temporal snapshot
+- `GET    /api/v2/relationships/traversal/{pattern}` — Execute named traversal pattern
+- `GET    /api/v2/relationships/for-class/{entity_class}` — All valid relationship types for an entity class
+
+#### New Migration (`20260628_0012_relationship_ontology.py`)
+- `relationship_ontology` — Formal registry table: all 76 types seeded with cardinality, direction, temporal, confidence floor, display labels; GIN indexes on `allowed_sources`/`allowed_targets`
+- `relationship_audit_log` — Audit trail for every relationship create/update/delete
+
+### Fixed
+- Migration chain: `0012` `down_revision` corrected to `20260628_0011_caem_base_entities`
+- Migration `0011` stale comment removed from `down_revision` line
+
+---
+
 ## [v0.4.0] — 2026-06-28
 
 ### Added — Phase 17.1: Canonical Aerospace Entity Model (CAEM)

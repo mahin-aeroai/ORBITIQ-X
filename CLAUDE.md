@@ -59,13 +59,18 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 
 ## Current Phase
 
-**Phase 17.2 — Universal Relationship Ontology** *(Active)*
+**Phase 17.2 — Universal Relationship Ontology** ✅ Complete
 
-CAEM Phase 17.1 is complete. Focus is now on:
-1. Formalizing all 76 relationship types in Neo4j
-2. Populating `operator_name` from Space-Track ownership data
-3. Creating Operator nodes with `OPERATED_BY` edges
-4. Redis fix → Digital Twin activation
+**Next: Phase 17.3 — Provenance and Versioning**
+
+All 76 relationship types formalized. Completed:
+- `relationship_ontology` table: 76 types with cardinality, direction, temporal rules
+- `relationship_audit_log`: full audit trail for all relationship mutations
+- `caem/ontology/relationship_registry.py`: typed `RelationshipDefinition` per type
+- `caem/graph/neo4j_relationship_schema.py`: Neo4j constraints, indexes, bulk upsert
+- `/api/v2/relationships` endpoints: create, validate, snapshot, traversal, ontology query
+- `TRAVERSAL_LIBRARY`: 11 named graph patterns for Graph Agent
+- Migration `0012` chained and seeded
 
 ---
 
@@ -236,7 +241,7 @@ data = json.loads(opener.open(url, timeout=120).read())
 | Sub-Phase | Scope | Status |
 |---|---|---|
 | 17.1 | Canonical Aerospace Entity Model | ✅ Complete |
-| 17.2 | Universal Relationship Ontology | 🔄 Active |
+| 17.2 | Universal Relationship Ontology | ✅ Complete |
 | 17.3 | Provenance and Versioning | Planned |
 | 17.4 | Knowledge Ingestion Framework | Planned |
 | 17.5 | Reusable Entity Intelligence Pages | Planned |

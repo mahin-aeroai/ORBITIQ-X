@@ -1,7 +1,6 @@
 """
 ORBITIQ-X — Alembic Migration: Phase 17.1 CAEM
 Revision: 017_01
-Previous: (your last stable migration head — set down_revision accordingly)
 
 CRITICAL Railway/PostgreSQL notes from CLAUDE.md:
   - Always use AUTOCOMMIT mode for Alembic on Railway PostgreSQL 18
@@ -25,7 +24,7 @@ import uuid
 
 # Set this to your current migration head
 revision = '017_01_caem_base'
-down_revision = '20260626_0010_add_fk_user_sessions'   # ← replace with your last migration revision
+down_revision = '20260626_0010_add_fk_user_sessions'
 branch_labels = None
 depends_on = None
 

@@ -53,8 +53,8 @@
 | Corpus domains | 12 |
 | GraphRAG benchmark | 20/20 (100%) |
 | GraphRAG avg latency | ~27,921ms |
-| API endpoints | 112 (103 + 9 CAEM) |
-| Alembic migrations | 11 |
+| API endpoints | 122 (103 + 9 CAEM + 10 Relationships) |
+| Alembic migrations | 12 |
 | Frontend pages | 10 (all active) |
 | CAEM entity classes | 39 |
 | CAEM relationship types | 76 |
@@ -94,6 +94,7 @@
 | Phase 16D | Aerospace Foundation Model: 3 tiers, 17 benchmarks | ✅ |
 | Phase 17 | Full platform activation: names, types, Neo4j enrichment, live pages | ✅ |
 | **Phase 17.1** | **Canonical Aerospace Entity Model (CAEM)** | ✅ |
+| **Phase 17.2** | **Universal Relationship Ontology** | ✅ |
 
 ---
 
