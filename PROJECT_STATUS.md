@@ -53,8 +53,8 @@
 | Corpus domains | 12 |
 | GraphRAG benchmark | 20/20 (100%) |
 | GraphRAG avg latency | ~27,921ms |
-| API endpoints | 131 (103 + 9 CAEM + 10 Rel + 9 Provenance) |
-| Alembic migrations | 13 |
+| API endpoints | 140 (103 + 9 CAEM + 10 Rel + 9 Prov + 9 Ingest) |
+| Alembic migrations | 14 |
 | Frontend pages | 10 (all active) |
 | CAEM entity classes | 39 |
 | CAEM relationship types | 76 |
@@ -96,6 +96,7 @@
 | **Phase 17.1** | **Canonical Aerospace Entity Model (CAEM)** | ✅ |
 | **Phase 17.2** | **Universal Relationship Ontology** | ✅ |
 | **Phase 17.3** | **Provenance & Versioning** | ✅ |
+| **Phase 17.4** | **Knowledge Ingestion Framework** | ✅ |
 
 ---
 

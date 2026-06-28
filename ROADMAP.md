@@ -123,11 +123,16 @@ Platform infrastructure is **stable**. Development focus is permanently on **Kno
 - 9 REST endpoints at `/api/v2/provenance`
 - `infer_source_tier()` — URL-based authority tier classification (NASA/NORAD/IEEE/arXiv)
 
-### Phase 17.4: Knowledge Ingestion Framework
-- Tier 1 pipelines: NASA, ESA, SpaceX, Space-Track official publications
-- Tier 2 pipelines: NORAD, COSPAR, UNOOSA registries
-- Entity extraction, AQID resolution, relationship classification
-- Automated ingestion scheduling
+### Phase 17.4: Knowledge Ingestion Framework ✅ Complete
+- `SourceAdapter` base + `SourceRecord` + `FetchResult` — universal adapter contract
+- `SpaceTrackAdapter` (Tier 2): SATCAT ingestion with field mapping, batching, rate limiting
+- `NASATechPortAdapter` (Tier 1): TechPort project → Technology/Program entities
+- `NASAMissionAdapter` (Tier 1): 8 curated major NASA missions with relationships
+- `CelestrakAdapter` (Tier 2): CSV parser (local dev; disabled in production)
+- `UNOOSAAdapter` (Tier 2): Registration seed data
+- `IngestionOrchestrator`: adapter registry, schedule management, pipeline bridge, provenance integration
+- 9 REST endpoints at `/api/v2/ingestion`: adapters, schedule, log, manual trigger, enable/disable
+- Migration `0014`: `ingestion_schedule_log` + `ingestion_source_config` (5 adapters seeded) + `ingestion_dedup_cache`
 
 ### Phase 17.5: Reusable Entity Intelligence Pages
 - Universal React entity page component (base layout + class extension panels)

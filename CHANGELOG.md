@@ -18,6 +18,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0-dev] — Phase 17.4 — Knowledge Ingestion Framework
+
+### Added
+
+#### Ingestion Sources (`backend/app/caem/ingestion/sources/`)
+- `base.py` — `SourceAdapter` ABC + `SourceRecord` + `FetchResult`:
+  - `SourceRecord`: normalized adapter output — source_id, tier, entity_class, canonical_name, fields, raw_relationships, content_hash
+  - `FetchResult`: per-run metrics (records_fetched, records_parsed, errors, duration_s)
+  - `SourceAdapter.run()`: wraps `fetch()` generator with error handling and max_records enforcement
+
+- `tier1_space_track.py` — `SpaceTrackAdapter` (Tier 2 / Registry):
+  - Cookie-based session auth against Space-Track.org REST API
+  - SATCAT ingestion with SATCAT_FIELD_MAP → CAEM extension field mapping
+  - Batch range splitting (30K records/request to avoid timeouts)
+  - OBJECT_TYPE normalization: PAYLOAD → satellite, ROCKET BODY → rocket_body, DEBRIS → debris
+  - Rate-limit compliance: 3s sleep between requests (~20 req/min)
+
+- `tier1_nasa.py` — NASA adapters (Tier 1 / Official):
+  - `NASATechPortAdapter`: NASA TechPort project API → Technology/Program entities (paginated)
+  - `NASAMissionAdapter`: Curated seed of 8 major NASA missions (Artemis, JWST, Perseverance, DART, ISS, Voyager 1, Hubble) with relationships (MANAGED_BY → NASA, LAUNCHED_BY → launch vehicle)
+
+- `tier2_registries.py` — Tier 2 registry adapters:
+  - `CelestrakAdapter`: SATCAT CSV parser (disabled in production — Railway IP blocked; use for local dev)
+  - `UNOOSAAdapter`: UNOOSA registration seed (3 canonical records; full API integration in Phase 17.4.1)
+
+#### Ingestion Orchestrator (`backend/app/caem/ingestion/orchestrator.py`)
+- `ADAPTER_REGISTRY`: maps 5 adapter names → classes for dynamic loading
+- `ScheduleEntry`: tracks last_run_at, next_run_at, total_runs, is_due()
+- `IngestionOrchestrator`:
+  - `register_adapter()` / `register_all()`: dynamic adapter registration with config
+  - `run_due()`: runs all adapters that have passed their interval
+  - `run_adapter()`: force-run a single adapter
+  - `_source_record_to_parsed()`: SourceRecord → ParsedEntity (pipeline bridge)
+  - `_extract_relationships()`: raw_relationships → ParsedRelationship list
+  - `_record_fact_provenance()`: field-level provenance via ProvenanceService for high-value fields
+  - `get_schedule_status()`: current schedule state for monitoring
+
+#### New API (`backend/app/api/v1/endpoints/ingestion.py`)
+9 endpoints at `/api/v2/ingestion`:
+- `GET  /adapters` — All registered adapters with schedule state
+- `GET  /adapters/{name}` — Adapter status + last 10 runs
+- `POST /adapters/{name}/run` — Manual trigger (background task)
+- `GET  /schedule` — Full schedule with is_due flags
+- `GET  /log` — Run history (filter by adapter/status)
+- `GET  /log/{job_id}` — Single job result
+- `PATCH /adapters/{name}/config` — Update interval, limits, enabled
+- `POST /adapters/{name}/enable` — Enable adapter
+- `POST /adapters/{name}/disable` — Disable adapter
+
+#### New Migration (`20260628_0014_ingestion_framework.py`)
+3 new tables:
+- `ingestion_schedule_log` — Per-run audit trail for every adapter execution
+- `ingestion_source_config` — Persisted adapter configs; seeded with 5 adapters (celestrak disabled by default)
+- `ingestion_dedup_cache` — Content hash deduplication to skip unchanged records on re-run
+
+### Validation
+- 5 adapters in registry: space_track, nasa_techport, nasa_missions, celestrak, unoosa
+- NASA Mission adapter: 8 records with correct MISSION entity class, Tier 1 provenance
+- UNOOSA adapter: 3 seed records with correct COSPAR IDs
+- Content hash: 16-char stable identifier per record
+- Space-Track range split: 1--99999 → 4 batches of 30K correctly
+
+---
+
 ## [v0.5.0-dev] — Phase 17.3 — Provenance & Versioning
 
 ### Added
