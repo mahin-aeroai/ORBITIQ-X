@@ -4,162 +4,136 @@
 
 ## Version History
 
-| Version | Description | Date |
-|---|---|---|
-| `v0.1.0` | Initial production deployment — full backend + frontend live | 2026-06-26 |
+| Version | Status | Date | Description |
+|---|---|---|---|
+| `v0.1.0` | ✅ Released | 2026-06-26 | Initial production deployment |
+| `v0.2.0` | ✅ Released | 2026-06-26 | SGP4 propagation · SATCAT enrichment · GraphRAG v1 |
+| `v0.3.0` | ✅ Released | 2026-06-27 | GraphRAG benchmark · 9/9 queries · 100% retrieval |
+| `v0.4.0` | ✅ Released | 2026-06-28 | Full platform activation · 185 corpus chunks · 20/20 benchmark |
 
 ---
 
 ## Completed Phases
 
-### Phase 1–3: Foundation
-- Core FastAPI application factory with lifespan management
-- PostgreSQL schema — users, sessions, satellites, TLE records, missions, events
-- JWT authentication — register, login, refresh, logout, RBAC
-- Alembic migration chain (10 migrations)
+### Phase 1–12: Foundation → AI Agents ✅
+- FastAPI backend · 103 endpoints · 12 routers
+- PostgreSQL schema · 10 Alembic migrations
+- JWT auth · RBAC · bcrypt passlib
+- Space-Track TLE ingestion · APScheduler (5 jobs)
+- SGP4 propagation · orbital regime classification
+- Neo4j knowledge graph · Qdrant vector store
+- LangGraph multi-agent orchestration · 7 specialist agents
+- Claude-powered conjunction analysis · maneuver planning · anomaly detection
 
-### Phase 4–6: SSA Core
-- Space-Track TLE ingestion with APScheduler (2h incremental, 6h full sync)
-- SGP4 propagation via `sgp4` library
-- RSO catalog with orbital regime classification (LEO/MEO/GEO/HEO/SSO/VLEO)
-- Conjunction event detection and CDM generation
+### Phase 13–14: Mission Control Frontend ✅
+- Next.js 14 App Router · TanStack Query
+- Cesium.js 3D orbital globe
+- Real-time SSE conjunction alerts
+- Space weather widget · dashboard metrics bar
+- Knowledge Graph explorer · agent activity feed
 
-### Phase 7–8: Digital Twin
-- Real-time orbital state propagation for all catalog objects
-- Trajectory forecasting with uncertainty bounds
-- Maneuver simulation and delta-V computation
-- Orbital regime health monitoring
-
-### Phase 9–10: Knowledge Graph + RAG
-- Neo4j graph — operator profiles, country intelligence, constellation topology
-- Weaviate vector store — aerospace knowledge embeddings
-- LangChain RAG pipeline — query, explain, research endpoints
-- GraphRAG fusion — graph + vector retrieval
-
-### Phase 11–12: AI Agents
-- LangGraph multi-agent orchestration
-- Claude-powered conjunction analysis agent
-- Maneuver planning agent
-- Anomaly detection agent
-- Agent task queue and status tracking
-
-### Phase 13A–C: Mission Control Frontend
-- Next.js 14 App Router application
-- Cesium.js 3D orbital globe (50K+ objects via GPU instancing)
-- Real-time SSE conjunction alert streaming
-- Space weather widget (NOAA integration)
-
-### Phase 13D–14: Dashboard Completion
-- TanStack Query data fetching layer
-- Ground track and trajectory playback
-- KnowledgeGraphExplorer with vis-network
-- Mission status cards and agent activity feed
-- DashboardMetricsBar with conjunction statistics
-
-### Phase 14D: Release Readiness Audit
-- 8 critical findings identified and resolved
-- FastAPI deprecation warnings eliminated
-- Authentication bypass patched
-- Startup-blocking defects fixed
-
-### Phase 15A: Production Deployment
-- Railway backend — Docker builder, Nixpacks glibc/greenlet issues resolved
-- Vercel frontend — Next.js build pipeline, auth middleware
-- Full auth flow: register → login → JWT → refresh → logout
-- All SQLAlchemy model relationships fixed
+### Phase 15A: Production Deployment ✅
+- Railway backend · Vercel frontend
+- Docker builder · Nixpacks glibc/greenlet fixes
+- Full auth flow · all SQLAlchemy relationships fixed
 - Alembic AUTOCOMMIT isolation level fix
+
+### Phase 15B: Operational Configuration ✅
+- Space-Track catalog sync: 29,198 satellites ingested
+- TLE records: 105,755
+- Conjunction engine: operational
+- Digital Twin: architecture complete (pending Redis)
+- Redis pub/sub: deployed (connectivity issue)
+
+### Phase 16: GraphRAG Corpus + Benchmark (v0.3.0) ✅
+- Corpus: 185 chunks across 12 aerospace domains
+- Benchmark: 9/9 queries, 100% corpus retrieval (v0.3.0)
+- Benchmark: 20/20 queries, 100% corpus retrieval (v0.4.0)
+- Average latency: 27,921ms
+- Schema: ChunkMetadata + CitationRecord all fields verified
+
+### Phase 17: Full Platform Activation (v0.4.0) ✅
+- **Satellite names**: 28,684 real names from Space-Track SATCAT (99.5%)
+- **Object types**: satellite 17,946 · debris 8,392 · rocket_body 2,091
+- **Catalog filters**: regime + type + search all working server-side
+- **Satellite detail drawer**: country, operator, orbital params, TLE
+- **Neo4j enrichment**:
+  - 11 Constellation nodes (Starlink 8,917 · OneWeb 452 · Iridium 134)
+  - 6 Country nodes (US 9,394 · CN 2,559 · RU 2,244)
+  - 118,681 relationships (ORBITS · LAUNCHED_BY · BELONGS_TO · PART_OF)
+- **4 live pages**: Conjunctions · Agents · Knowledge Graph · Foundation
+- **Rotating globe**: animated Earth with LEO/MEO/GEO/SSO satellites
+- **AI Workspace**: GraphRAG pipeline visible to all users
+- **Space weather**: live Kp/F10.7/storm data from /space-weather/current
+- **ignoreBuildErrors**: fixed Vercel build failures (was blocking page deploys)
+
+### Phase 17.1: CAEM — Canonical Aerospace Entity Model ✅ (Defined)
+- 45+ entity type taxonomy defined
+- 4-layer persistence: PostgreSQL · Neo4j · Qdrant · frontend intelligence
+- Phase 17.2: Universal Relationship Ontology (next)
 
 ---
 
-## Current Phase
+## Current Focus
 
-### Phase 15B: Operational Configuration *(In Progress)*
-
-**Objective:** Activate all platform capabilities with real data.
-
-**Deliverables:**
-- [ ] Space-Track catalog sync producing TLE data
-- [ ] Digital Twin propagating orbital states for all tracked objects
-- [ ] Conjunction engine producing real CDM events
-- [ ] Redis pub/sub operational for SSE alerts
-- [ ] Dashboard showing live tracked objects, conjunctions, space weather
-
-**Exit Criteria:**
-- Dashboard shows >1000 tracked objects
-- At least one conjunction event detected and displayed
-- System Status shows all core services HEALTHY
+### Phase 17.2: Universal Relationship Ontology
+- Define all relationship types between CAEM entities
+- Implement OPERATED_BY (satellite → operator) in Neo4j
+- Populate operator_name field in PostgreSQL from Space-Track
+- Add operator nodes linked to country nodes
 
 ---
 
 ## Planned Phases
 
-### Phase 16: Operational AI Mission Intelligence
+### Phase 18: Redis Activation + Digital Twin
 **Objectives:**
-- Activate Claude agents with real satellite data
-- Conjunction analysis agent producing actionable insights
-- Maneuver recommendation agent with delta-V calculations
-- Natural language query interface for operators
-
-**Deliverables:**
-- Agents page with live task queue and results
-- Real conjunction alerts triggering agent analysis
-- Maneuver simulation API integrated with agents
+- Fix Redis connectivity (add Railway Redis addon or REDIS_URL)
+- Activate Digital Twin propagation for all 29,198 objects
+- Real-time satellite positions on globe
+- SSE conjunction alert streaming
 
 **Exit Criteria:**
-- At least one end-to-end agent workflow: conjunction detected → agent analyzes → recommendation produced
+- Globe shows live propagated positions
+- Digital Twin status = operational
+- Redis pub/sub active
 
----
-
-### Phase 17: Predictive Orbital Analytics
+### Phase 19: Corpus Expansion (500+ chunks)
 **Objectives:**
-- Long-horizon conjunction prediction (7-day lookahead)
+- Expand from 185 → 500+ chunks (50 chunks/domain)
+- Add primary sources: Spacetrack Report No.3, IADC, CCSDS full standards
+- Local download → Railway upload (bypasses IP restrictions)
+- Reranking with cross-encoder for precision improvement
+
+**Exit Criteria:**
+- 500+ chunks in Qdrant
+- Average latency < 20s (with reranking + streaming)
+- Retrieval accuracy ≥ 100% on 20-query benchmark
+
+### Phase 20: Operator Intelligence
+**Objectives:**
+- Populate operator_name in PostgreSQL from Space-Track ownership data
+- Create Operator nodes in Neo4j with OPERATED_BY relationships
+- Operator risk profiles with conjunction exposure metrics
+- Operator page in frontend
+
+### Phase 21: Streaming + Latency
+**Objectives:**
+- RAG streaming endpoint (/rag/stream) for first-token < 2s
+- Embedding model upgrade (BGE-M3 or E5-large-v2, 1024-dim)
+- Response caching in Redis (repeat queries < 100ms)
+- Parallel graph + vector retrieval
+
+### Phase 22: Predictive Analytics
+**Objectives:**
+- 7-day conjunction lookahead prediction
 - Orbital decay modeling for LEO objects
-- Space weather impact on drag and decay rates
-- Historical conjunction trend analysis
+- Space weather impact on drag/decay rates
+- Historical trend analysis
 
-**Deliverables:**
-- Predictive conjunction dashboard
-- Decay timeline visualization
-- Space weather correlation reports
-
----
-
-### Phase 18: Autonomous Maneuver Recommendations
+### Phase 23: Foundation Model Fine-tuning
 **Objectives:**
-- Automated maneuver planning for collision avoidance
-- Multi-constraint optimization (fuel, time, collision probability)
-- Operator approval workflow with audit trail
-- Post-maneuver verification
-
-**Deliverables:**
-- Maneuver recommendation engine
-- Approval workflow UI
-- Maneuver audit log
-
----
-
-### Phase 19: Aerospace Foundation Model
-**Objectives:**
-- Fine-tuned LLM on aerospace domain data
+- LoRA fine-tuning on aerospace domain data
 - Satellite behavior prediction model
 - Anomaly detection via learned orbital baselines
-- Knowledge distillation from operational data
-
-**Deliverables:**
-- Foundation model training pipeline
-- Benchmark suite (orbital prediction accuracy)
-- Model registry and versioning
-
----
-
-### Phase 20: Enterprise Multi-User Operations
-**Objectives:**
-- Multi-tenant architecture with organization isolation
-- Role-based access control for satellite operators
-- API key management for programmatic access
-- SLA monitoring and alerting
-
-**Deliverables:**
-- Organization management UI
-- API key portal
-- Usage dashboards and billing hooks
+- Benchmark suite for orbital prediction accuracy

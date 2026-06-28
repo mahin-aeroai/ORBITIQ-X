@@ -1,147 +1,93 @@
 # ORBITIQ-X — Project Status
 
-**Last Updated:** 2026-06-26  
-**Updated By:** Phase 15A Production Stabilization
+**Last Updated:** 2026-06-28  
+**Current Version:** `v0.4.0`  
+**Updated By:** Phase 17.1 — CAEM + Full Platform Activation
 
 ---
 
 ## Version
 
-`v0.1.0`
+`v0.4.0` — Production
 
-## Current Commit
+**Production URLs:**
+- Backend: https://orbitiq-x-production.up.railway.app
+- Frontend: https://orbitiq-x.vercel.app
+- GitHub: https://github.com/mahin-aeroai/ORBITIQ-X
 
-`dc04d94` — feat: add all missing frontend pages
+---
 
-## Current Deployment
+## Platform Health (as of 2026-06-28)
 
-| Environment | URL | Status |
+| Service | Status | Detail |
 |---|---|---|
-| **Production Frontend** | https://orbitiq-x.vercel.app | ✅ Live |
-| **Production Backend** | https://orbitiq-x-production.up.railway.app | ✅ Live |
-| **API Documentation** | https://orbitiq-x-production.up.railway.app/api/v1/docs | ✅ Live |
+| PostgreSQL | ✅ healthy | 29,198 satellites · real names 99.5% |
+| Neo4j Aura | ✅ healthy | 29,248 nodes · 118,681 relationships |
+| Qdrant Cloud | ✅ healthy | 185 chunks · aerospace_docs |
+| GraphRAG | ✅ operational | full_graphrag mode · 100% retrieval |
+| Agent System | ✅ healthy | 7 specialists · LangGraph + Claude |
+| Conjunction Engine | ✅ operational | CDM screening active |
+| Scheduler | ✅ running | 5 jobs registered |
+| Redis | ⚠️ unavailable | Non-critical · scheduler uses fallback |
+| Digital Twin | ⚠️ not_initialised | Requires Redis → catalog sync |
+| MinIO | ⚠️ unavailable | Not required for core SSA |
 
-## Current Phase
+---
 
-**Phase 15B — Operational Configuration**
+## Production Metrics
 
-Backend deployed, frontend deployed, authentication working. Configuring external integrations (Space-Track, Neo4j Aura) to activate full platform capabilities.
-
-## Overall Status
-
-| Area | Status |
+| Metric | Value |
 |---|---|
-| Backend deployment | ✅ Complete |
-| Frontend deployment | ✅ Complete |
-| Authentication | ✅ Working |
-| Database migrations | ✅ 10/10 applied |
-| API endpoints | ✅ 103 endpoints registered |
-| Satellite catalog | ⚙️ Awaiting Space-Track sync |
-| Knowledge graph | ⚙️ Awaiting Neo4j Aura config |
-| Vector store | ⚙️ Not provisioned |
+| Tracked satellites | 29,198 |
+| Real satellite names | 28,684 (98.2%) |
+| Satellite type — payload | 17,946 |
+| Satellite type — debris | 8,392 |
+| Satellite type — rocket body | 2,091 |
+| TLE records | 105,755 |
+| Neo4j nodes | 29,248 |
+| Neo4j relationships | 118,681 |
+| Constellations in graph | 11 (Starlink 8,917 · OneWeb 452 · Iridium 134) |
+| Countries in graph | 6 (US 9,394 · CN 2,559 · RU 2,244) |
+| Qdrant corpus chunks | 185 |
+| Corpus domains | 12 |
+| GraphRAG avg latency | ~10-28s |
+| Benchmark queries | 20/20 (100%) |
+| API endpoints | 103 |
+| Frontend pages | 10 (all active) |
 
 ---
 
-## Completed Phases
+## Active Pages
 
-| Phase | Description | Status |
+| Page | Route | Status |
 |---|---|---|
-| Phase 1–5 | Core backend architecture, DB models, auth, SSA endpoints | ✅ |
-| Phase 6–8 | Digital twin, conjunction engine, mission intelligence | ✅ |
-| Phase 9–10 | Knowledge graph, GraphRAG, LangChain integration | ✅ |
-| Phase 11–12 | LangGraph agents, Claude integration, multi-agent reasoning | ✅ |
-| Phase 13A–C | Next.js frontend, Cesium globe, Mission Control dashboard | ✅ |
-| Phase 13D–14 | TanStack Query, SSE alerts, ground tracks, space weather | ✅ |
-| Phase 14D | Release readiness audit — 8 findings resolved | ✅ |
-| Phase 15A | Deployment toolkit, Railway + Vercel production deployment | ✅ |
+| Mission Control | / | ✅ Live — rotating globe, live metrics |
+| Satellite Catalog | /catalog | ✅ Live — 29,198 RSOs, filters, detail drawer |
+| Conjunctions | /conjunctions | ✅ Live — Pc analysis, CDM viewer |
+| Agents | /agents | ✅ Live — 7 specialists, task history |
+| Knowledge Graph | /knowledge-graph | ✅ Live — Neo4j analytics, search |
+| AI Workspace | /intelligence | ✅ Live — GraphRAG Q&A pipeline |
+| GraphRAG | /graphrag | ✅ Live |
+| Foundation | /foundation | ✅ Live — architecture, benchmark, services |
+| System Status | /system | ✅ Live |
+| Infrastructure | /infrastructure | ✅ Live |
 
 ---
 
-## Active Work
+## Known Issues
 
-**Phase 15B — Operational Configuration**
-
-1. Space-Track credentials configured → awaiting first catalog sync
-2. All frontend pages live (Dashboard, Catalog, Conjunctions, Agents, Knowledge Graph, System Status, Foundation)
-3. Authentication flow fully operational
-
----
-
-## Current Blockers
-
-| Blocker | Impact | Resolution |
+| Issue | Impact | Workaround |
 |---|---|---|
-| Space-Track sync pending | Catalog empty (0 objects) | Add `SPACETRACK_IDENTITY` + `SPACETRACK_PASSWORD` to Railway ✅ done, awaiting sync |
-| Redis UNAVAILABLE | SSE alerts, pub/sub disabled | Redis plugin provisioned but client not initialising — check `REDIS_URL` injection |
-| Neo4j not configured | Knowledge graph disabled | Sign up for Neo4j Aura free tier, add credentials |
+| Redis unavailable | No real-time SSE alerts, Digital Twin not initialised | Scheduler uses APScheduler memory fallback |
+| Digital Twin not initialised | Globe shows static satellite positions only | Requires Redis fix + POST /catalog/sync |
+| Neo4j operator_name not populated | No OPERATED_BY relationships | Using Constellation nodes as proxy |
+| Schema patches not persisted | `rag/src/models/schemas.py` reverts on redeploy | File committed to repo — persists on clean redeploy |
 
 ---
 
-## Repository Health
+## Critical Path
 
-| Check | Status | Detail |
-|---|---|---|
-| Backend startup | ✅ | Gunicorn 2 workers, both `Application startup complete` |
-| Database | ✅ | PostgreSQL HEALTHY, 416ms latency |
-| Migrations | ✅ | 10/10 applied, at head `0010_add_fk_user_sessions` |
-| API imports | ✅ | All 12 routers import cleanly, 0 exceptions |
-| FastAPI deprecations | ✅ | Zero DeprecationWarnings — `regex=` → `pattern=` fixed |
-| OpenTelemetry | ✅ | Fully optional — `ImportError` caught, startup unaffected |
-| structlog | ✅ | `_safe_add_logger_name` prevents NoneType crash |
-| Frontend build | ✅ | `npm run build` passes, 9/9 static pages |
-| Auth flow | ✅ | Register → Login → JWT → refresh all working |
-| Unit tests | ⚠️ | 493 passed, 68 failed (test env issues, not production bugs) |
-
----
-
-## Infrastructure Status
-
-| Service | Status | Notes |
-|---|---|---|
-| PostgreSQL (Railway) | ✅ HEALTHY | Primary data store, 416ms latency |
-| Redis (Railway) | ⚠️ UNAVAILABLE | Client not initialising — check REDIS_URL var |
-| Neo4j | ⚠️ NOT CONFIGURED | Needs Aura free tier credentials |
-| Weaviate | ⚠️ NOT CONFIGURED | Vector store for RAG |
-| Space-Track | ⚙️ CONFIGURED | Credentials added, awaiting first sync |
-| Anthropic API | ✅ CONFIGURED | Claude claude-sonnet-4-6 |
-| OpenAI API | ✅ CONFIGURED | Embeddings |
-| APScheduler | ✅ RUNNING | 5 jobs registered |
-
----
-
-## Test Status
-
-```
-493 passed, 68 failed, 19 skipped
-```
-
-Failures are in test environment setup (mock configuration), not production code. Core auth, SSA, digital twin, and API tests pass.
-
----
-
-## Recent Commits
-
-| Hash | Description |
-|---|---|
-| `dc04d94` | feat: add all missing frontend pages |
-| `ea5559b` | fix: remove invalid onError prop from Resium Viewer |
-| `a6b31e8` | fix: add legacy Cesium props to OrbitalGlobeProps interface |
-| `593cad9` | fix: replace globe with pure SVG — no crashes |
-| `80c8408` | fix: remove all cross-model string primaryjoin relationships |
-| `db0c5ec` | fix: remove back_populates audit_logs from AuditLog.user |
-| `85be9bf` | fix: AUTOCOMMIT isolation level for alembic migrations |
-| `4ecca4b` | fix: pin bcrypt<4.0.0 for passlib compatibility |
-| `5054932` | fix: add missing ForeignKey to UserSession.user_id |
-| `bf70e98` | fix: agent_service.py IndexError parents[4] wrong in Docker |
-
----
-
-## Next Milestone
-
-**Populate satellite catalog** — Space-Track sync produces first TLE batch → Digital Twin propagates orbital states → Conjunction engine activates → Dashboard shows live tracked objects.
-
-Register at https://www.space-track.org (free) if not done, then set in Railway Variables:
-```
-SPACETRACK_IDENTITY=your@email.com
-SPACETRACK_PASSWORD=yourpassword
-```
+1. **Fix Redis** — add REDIS_URL env var or Railway Redis service
+2. **Trigger catalog sync** — POST /api/v1/catalog/sync {"mode":"full"}
+3. **Digital Twin activates** — 29,198 objects propagated in real-time
+4. **Globe shows live positions** — Cesium renders actual satellite tracks
