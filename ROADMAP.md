@@ -84,7 +84,7 @@
 
 ---
 
-## Planned Phases
+## Planned Phases — Knowledge Engineering
 
 ### Phase 18: Redis Activation + Digital Twin
 **Objectives:**
