@@ -61,7 +61,7 @@ export default function MissionControlPage() {
               defaultObjectTypes={["PAYLOAD", "DEBRIS"]}
               showConjunctions
               showGroundTracks
-              autoRotate={false}
+              autoRotate={true}
             />
           </Suspense>
         </div>

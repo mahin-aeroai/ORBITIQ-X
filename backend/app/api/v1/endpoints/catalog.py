@@ -457,11 +457,42 @@ async def get_satellite(
 
 
 # ── GET /catalog/satellites ───────────────────────────────────────────────────
+#
+# NOTE: regime is NULL for most rows (only set after Digital Twin propagation).
+# We compute regime from perigee/apogee at query time.
+# object_type is stored lowercase: "satellite", "debris", "rocket_body", "unknown"
+# The API accepts: PAYLOAD/SAT → "satellite"; ROCKET_BODY/RB → "rocket_body";
+#                  DEBRIS/DEB → "debris"
+
+def _compute_regime(perigee_km, apogee_km, inclination_deg, stored_regime):
+    """Compute regime from orbital elements when stored value is NULL."""
+    if stored_regime:
+        return stored_regime.upper()
+    if perigee_km is None or apogee_km is None:
+        return "UNKNOWN"
+    alt = (perigee_km + apogee_km) / 2.0
+    inc = inclination_deg or 0.0
+    if alt < 0:       return "UNKNOWN"
+    if alt < 450:     return "VLEO"
+    if alt < 2000:
+        if 96 <= inc <= 100: return "SSO"
+        return "LEO"
+    if alt < 35000:   return "MEO"
+    if alt <= 36500:  return "GEO"
+    return "HEO"
+
+def _normalize_type(raw: str) -> str:
+    """Normalise DB object_type to frontend-friendly uppercase."""
+    r = (raw or "unknown").lower().strip()
+    if r in ("satellite", "payload"):    return "PAYLOAD"
+    if r in ("debris",):                 return "DEBRIS"
+    if r in ("rocket_body", "r/b", "rocket body"): return "ROCKET_BODY"
+    return "UNKNOWN"
 
 @router.get(
     "/satellites",
     summary="Paginated satellite catalog",
-    description="Query the full satellite catalog with optional filters.",
+    description="Full RSO catalog from PostgreSQL with regime computed from TLE orbital elements.",
 )
 async def list_satellites(
     regime:  str | None = None,
@@ -471,9 +502,22 @@ async def list_satellites(
     limit:   int = 200,
     session: AsyncSession = Depends(get_session),
 ) -> ORJSONResponse:
-    from sqlalchemy import select, or_, func, String
+    from sqlalchemy import select, or_, func, case, literal, and_, Float
+    from sqlalchemy import text
     from app.db.models.satellites import Satellite
 
+    # Map frontend type tokens → DB values
+    TYPE_MAP = {
+        "PAYLOAD":     ["satellite", "payload"],
+        "SAT":         ["satellite", "payload"],
+        "DEBRIS":      ["debris"],
+        "DEB":         ["debris"],
+        "ROCKET_BODY": ["rocket_body"],
+        "RB":          ["rocket_body"],
+        "UNKNOWN":     ["unknown", "tba"],
+    }
+
+    # Build base query — always fetch orbital elements so we can compute regime
     q = select(
         Satellite.norad_id,
         Satellite.name,
@@ -484,32 +528,72 @@ async def list_satellites(
         Satellite.apogee_km,
         Satellite.period_minutes,
         Satellite.country_code,
+        Satellite.operator_name,
+        Satellite.mission_type,
+        Satellite.status,
+        Satellite.cospar_id,
     )
 
-    if regime and regime != "ALL":
-        q = q.where(Satellite.regime == regime.upper())
-    if type and type != "ALL":
-        q = q.where(Satellite.object_type == type.upper())
-    if search:
-        like = f"%{search}%"
-        q = q.where(or_(
-            Satellite.name.ilike(like),
-            func.cast(Satellite.norad_id, String).like(f"{search}%"),
-        ))
+    # Type filter (against DB lowercase values)
+    type_upper = (type or "ALL").upper()
+    if type_upper not in ("ALL", ""):
+        db_vals = TYPE_MAP.get(type_upper)
+        if db_vals:
+            q = q.where(Satellite.object_type.in_(db_vals))
 
-    # Total count
-    count_q = select(func.count()).select_from(q.subquery())
-    total_result = await session.execute(count_q)
-    total = total_result.scalar() or 0
+    # Search filter
+    if search and search.strip():
+        s = search.strip()
+        like = f"%{s}%"
+        try:
+            norad_int = int(s)
+            q = q.where(or_(
+                Satellite.name.ilike(like),
+                Satellite.norad_id == norad_int,
+            ))
+        except ValueError:
+            q = q.where(Satellite.name.ilike(like))
 
-    # Paginated data
-    q = q.order_by(Satellite.norad_id).offset(page * limit).limit(min(limit, 500))
-    result = await session.execute(q)
-    rows = result.mappings().all()
+    # Fetch all matching rows (regime filter applied in Python after compute)
+    q = q.order_by(Satellite.norad_id)
+
+    # For regime filtering we need to fetch and filter in Python
+    # since regime is NULL and computed from perigee/apogee
+    regime_upper = (regime or "ALL").upper()
+    needs_regime_filter = regime_upper not in ("ALL", "")
+
+    if not needs_regime_filter:
+        # Can use DB-level pagination
+        count_q = select(func.count()).select_from(q.subquery())
+        total_result = await session.execute(count_q)
+        total = total_result.scalar() or 0
+        q = q.offset(page * min(limit, 500)).limit(min(limit, 500))
+        result = await session.execute(q)
+        rows = result.mappings().all()
+        objects = []
+        for r in rows:
+            d = dict(r)
+            d["regime"]      = _compute_regime(d.get("perigee_km"), d.get("apogee_km"), d.get("inclination_deg"), d.get("regime"))
+            d["object_type"] = _normalize_type(d.get("object_type", "unknown"))
+            objects.append(d)
+    else:
+        # Fetch all matching rows, filter by computed regime, then paginate
+        result = await session.execute(q)
+        all_rows = result.mappings().all()
+        objects_all = []
+        for r in all_rows:
+            d = dict(r)
+            d["regime"]      = _compute_regime(d.get("perigee_km"), d.get("apogee_km"), d.get("inclination_deg"), d.get("regime"))
+            d["object_type"] = _normalize_type(d.get("object_type", "unknown"))
+            if d["regime"] == regime_upper:
+                objects_all.append(d)
+        total = len(objects_all)
+        start = page * min(limit, 500)
+        objects = objects_all[start : start + min(limit, 500)]
 
     return ORJSONResponse(content={
         "total":   total,
         "page":    page,
         "limit":   limit,
-        "objects": [dict(r) for r in rows],
+        "objects": objects,
     })
