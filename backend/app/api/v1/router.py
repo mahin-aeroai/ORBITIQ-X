@@ -172,6 +172,14 @@ api_v1_router.include_router(
     dependencies=[_any_auth],
 )
 
+# ─── CAEM Relationships (Phase 17.2)
+from app.api.v1.endpoints import relationships  # noqa: E402
+api_v1_router.include_router(
+    relationships.router,
+    tags=["CAEM — Relationships"],
+    dependencies=[_analyst],
+)
+
 # ─── CDM Document (separate path) ────────────────────────────────────────────
 # CDM endpoint is under /conjunctions/cdm/{id} but also exposed at /cdm/{id}
 # for direct document retrieval by external tools.
