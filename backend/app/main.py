@@ -238,11 +238,13 @@ def _register_routers(app: FastAPI) -> None:
     @app.get("/ready", tags=["System"], summary="Platform readiness probe")
     async def readiness_check() -> dict:
         """
-        Readiness probe — checks that DB and Redis are reachable.
-        Returns 200 if ready to serve traffic, 503 if not.
+        Readiness probe — checks that DB is reachable.
+        Redis unavailability is non-fatal (degraded, not down).
+        Returns 200 if ready to serve traffic, 503 only if DB is down.
         """
         from fastapi.responses import JSONResponse
         from app.db.session import get_engine
+        from app.db.redis_session import get_redis_status
         issues = []
         try:
             engine = get_engine()
@@ -255,7 +257,14 @@ def _register_routers(app: FastAPI) -> None:
                 status_code=503,
                 content={"status": "not_ready", "issues": issues}
             )
-        return {"status": "ready", "platform": "ORBITIQ-X"}
+        redis_status = get_redis_status()
+        return {
+            "status":   "ready",
+            "platform": "ORBITIQ-X",
+            "database": "healthy",
+            "redis":    redis_status["status"],
+            "redis_details": redis_status if not redis_status["connected"] else None,
+        }
 
     @app.get("/", tags=["System"], include_in_schema=False)
     async def root() -> dict:

@@ -18,6 +18,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0-dev] — Phase 18 — Redis Activation + Digital Twin
+
+### Added
+
+#### Redis Session (`backend/app/db/redis_session.py`)
+- Retry logic with exponential backoff: `MAX_INIT_ATTEMPTS=5`, delay doubles from 2s → 60s cap
+- `get_redis_status()`: detailed diagnostics dict (connected, uptime_s, last_error, connection_attempts, impact_if_down, fix instructions)
+- `reconnect_redis()`: manual reconnection trigger (ping-first, then re-init)
+- `_start_reconnect_monitor()`: background asyncio task that pings every 60s and auto-reconnects on failure
+- Explicit `REDIS_URL` env var fallback check with actionable warning log
+
+#### Digital Twin Control API (`backend/app/api/v1/endpoints/digital_twin_control.py`)
+- `GET  /digital-twin/redis-status` — Full Redis connection diagnostics with impact list and fix instructions
+- `POST /digital-twin/redis-reconnect` — Manual reconnect trigger (no redeployment required)
+- `GET  /digital-twin/status` — Digital Twin health: Redis, propagation count, density map, SSE capability flags
+- `POST /digital-twin/activate` — Background SGP4 propagation cycle for all tracked objects
+- `GET  /digital-twin/live-positions` — Redis/in-memory live propagated positions (regime filter, limit)
+- `POST /digital-twin/catalog-sync?mode=full|incremental` — Catalog sync + auto-propagation chain
+
+#### System Improvements
+- `main.py`: `/ready` endpoint enhanced — now returns Redis status alongside DB health (Redis down = degraded, not 503)
+- `router.py`: Digital Twin Control router wired in
+
+#### Frontend — RedisStatusWidget (`frontend/src/components/ssa/RedisStatusWidget.tsx`)
+- Real-time Redis + Digital Twin status panel (30s poll)
+- StatusDot with pulse animation when healthy
+- Impact list when Redis is unavailable (SSE, Digital Twin, lock, cache)
+- Fix instruction display with Railway-specific guidance
+- Action buttons: ↻ Reconnect Redis, ▶ Activate Digital Twin, Incremental/Full catalog sync
+- Added to System Status page (`/system`)
+
+#### Operations Guide (`docs/OPERATIONS/REDIS_ACTIVATION.md`)
+- Railway Redis Plugin setup (Option A) and External Redis setup (Option B)
+- Step-by-step: add REDIS_URL → verify connection → activate Digital Twin → catalog sync
+- Redis key schema table (twin:state, twin:density, pub/sub channel, scheduler lock)
+- Troubleshooting table: REDIS_URL missing, wrong password, timeout, VPC issues
+
+---
+
 ## [v0.5.0-dev] — Phase 17.6 — Cross-Entity Navigation
 
 ### Added

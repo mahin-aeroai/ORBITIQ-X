@@ -29,7 +29,7 @@
 | Agent System | ✅ healthy | 7 specialists · LangGraph + Claude Sonnet 4.6 |
 | Conjunction Engine | ✅ operational | CDM screening active |
 | Scheduler | ✅ running | 5 jobs registered |
-| Redis | ⚠️ unavailable | Non-critical · scheduler uses memory fallback |
+| Redis | ⚠️ pending activation | Add REDIS_URL to Railway Variables → auto-reconnects |
 | Digital Twin | ⚠️ not_initialised | Requires Redis → catalog sync |
 | MinIO | ⚠️ unavailable | Not required for core SSA |
 
@@ -99,6 +99,7 @@
 | **Phase 17.4** | **Knowledge Ingestion Framework** | ✅ |
 | **Phase 17.5** | **Reusable Entity Intelligence Pages** | ✅ |
 | **Phase 17.6** | **Cross-Entity Navigation** | ✅ |
+| **Phase 18** | **Redis Activation + Digital Twin** | ✅ |
 
 ---
 

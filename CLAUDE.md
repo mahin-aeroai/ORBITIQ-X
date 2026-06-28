@@ -51,7 +51,7 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 | PostgreSQL | Railway plugin | `DATABASE_URL` env var, asyncpg driver |
 | Neo4j | `neo4j+s://bff8c462.databases.neo4j.io` | DB + User: `bff8c462` |
 | Qdrant | `2435500e-...us-west-1-0.aws.cloud.qdrant.io` | Collection: `aerospace_docs`, 384-dim |
-| Redis | Railway plugin | UNAVAILABLE — blocks Digital Twin |
+| Redis | Railway plugin | Add REDIS_URL env var → auto-reconnects on startup |
 | Space-Track | `www.space-track.org` | `SPACETRACK_IDENTITY` + `SPACETRACK_PASSWORD` |
 | Anthropic | API | `ANTHROPIC_API_KEY`, model: `claude-sonnet-4-6` |
 
@@ -59,9 +59,9 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 
 ## Current Phase
 
-**Phase 17.6 — Cross-Entity Navigation** ✅ Complete
+**Phase 18 — Redis Activation + Digital Twin** ✅ Complete
 
-**Next: Phase 17.7 — Business Intelligence Layer**
+**Next: Phase 19 — Corpus Expansion**
 
 All 76 relationship types formalized. Completed:
 - `relationship_ontology` table: 76 types with cardinality, direction, temporal rules

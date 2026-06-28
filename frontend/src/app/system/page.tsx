@@ -18,6 +18,7 @@
  *   /platform/status → every 10s (reads in-memory state — fast)
  */
 
+import { RedisStatusWidget } from "@/components/ssa/RedisStatusWidget";
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { useQuery } from "@tanstack/react-query";
@@ -400,7 +401,11 @@ function SystemStatusContent() {
 
         </div>
       </div>
-    </div>
+    
+      <div className="mt-4">
+        <RedisStatusWidget />
+      </div>
+</div>
   );
 }
 

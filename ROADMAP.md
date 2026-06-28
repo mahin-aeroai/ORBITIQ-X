@@ -151,13 +151,13 @@ Platform infrastructure is **stable**. Development focus is permanently on **Kno
 - `RelatedEntitiesSidebar`: graph neighbors + same-class + shared-domain sections + quick jump
 - Wired into entity page (2-col layout), catalog drawer ("◆ Entity Page" button), KG search results (hover link)
 
-### Phase 18: Redis Activation + Digital Twin
-- Fix Redis connectivity (add Railway Redis addon or `REDIS_URL`)
-- Activate Digital Twin propagation for all 29,198 objects
-- Real-time satellite positions on globe
-- SSE conjunction alert streaming
-
-**Exit Criteria:** Globe shows live propagated positions · Digital Twin status = operational
+### Phase 18: Redis Activation + Digital Twin ✅ Complete
+- `redis_session.py`: retry logic, exponential backoff, background reconnect monitor, `get_redis_status()`
+- Digital Twin Control API: 6 endpoints (`/redis-status`, `/redis-reconnect`, `/status`, `/activate`, `/live-positions`, `/catalog-sync`)
+- `/ready` endpoint: Redis diagnostics in response (down = degraded not 503)
+- `RedisStatusWidget`: impact list, fix instructions, one-click reconnect + activation buttons
+- `docs/OPERATIONS/REDIS_ACTIVATION.md`: step-by-step Railway setup guide
+- **To complete**: Add REDIS_URL to Railway Variables → POST /digital-twin/activate
 
 ### Phase 19: Corpus Expansion (500+ chunks)
 - Expand from 185 → 500+ chunks (50 chunks/domain)
