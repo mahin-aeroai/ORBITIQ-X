@@ -543,3 +543,49 @@ async def get_space_weather() -> ORJSONResponse:
     bridge  = _get_weather_bridge()
     weather = await bridge.get_space_weather()
     return ORJSONResponse(content=weather)
+
+
+# ── Redis diagnostics (Phase 18) ─────────────────────────────
+# These endpoints live here (not in a separate control file) to avoid
+# prefix conflicts. Both use the same /digital-twin prefix.
+
+@router.get(
+    "/redis-status",
+    summary="Redis connection diagnostics",
+    tags=["Digital Twin — Redis"],
+)
+async def get_redis_status_endpoint():
+    """
+    Detailed Redis connection diagnostics.
+    Shows connection state, uptime, last error, and fix instructions.
+    No auth required beyond the router-level dependency.
+    """
+    from app.db.redis_session import get_redis_status
+    return get_redis_status()
+
+
+@router.post(
+    "/redis-reconnect",
+    summary="Trigger manual Redis reconnect",
+    tags=["Digital Twin — Redis"],
+)
+async def trigger_redis_reconnect_endpoint():
+    """
+    Manually trigger a Redis reconnection attempt.
+    Use this after adding REDIS_URL to Railway Variables without redeploying.
+    """
+    from app.db.redis_session import reconnect_redis, get_redis_status
+
+    success = await reconnect_redis()
+    status  = get_redis_status()
+
+    return {
+        "reconnect_attempted": True,
+        "success":             success,
+        "redis_status":        status,
+        "message": (
+            "Redis connected. Digital Twin caching now active."
+            if success else
+            "Reconnect failed. Check REDIS_URL in Railway Variables."
+        ),
+    }

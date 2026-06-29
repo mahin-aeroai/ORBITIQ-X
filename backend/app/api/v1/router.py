@@ -22,7 +22,6 @@ Access matrix (Phase 14A)
 from fastapi import APIRouter, Depends
 
 from app.api.v1.endpoints.knowledge_intelligence import router as knowledge_intelligence_router
-from app.api.v1.endpoints.digital_twin_control import router as digital_twin_control_router
 from app.api.v1.endpoints import (
     satellites,
     ssa,
@@ -218,13 +217,6 @@ api_v1_router.include_router(
     dependencies=[_operator],        # FIX H-01: was missing, exposed /cdm unauthenticated
     include_in_schema=False,         # avoid duplicate docs, real route is on /conjunctions
 )
-# ─── Digital Twin Control (Phase 18) ────────────────────────────────────────
-api_v1_router.include_router(
-    digital_twin_control_router,
-    tags=["Digital Twin Control"],
-    dependencies=[_operator],
-)
-
 # ─── Knowledge Intelligence (Phases 17.7-17.10) ──────────────────────────────
 api_v1_router.include_router(
     knowledge_intelligence_router,
