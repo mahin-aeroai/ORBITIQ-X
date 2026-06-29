@@ -4,6 +4,8 @@ ORBITIQ-X Backend — Application Entry Point
 FastAPI application factory with middleware stack, lifespan context,
 health checks, and API router registration.
 """
+from __future__ import annotations
+
 import sys
 import os as _os
 # Ensure backend/app is in sys.path so 'caem', 'app' subpackages are importable
@@ -13,9 +15,6 @@ for _p in [_APP_DIR, _BACKEND_DIR]:
     if _p not in sys.path:
         sys.path.insert(0, _p)
 del _APP_DIR, _BACKEND_DIR, _p
-
-
-from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
