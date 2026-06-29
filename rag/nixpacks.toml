@@ -1,0 +1,8 @@
+# This directory is a library used by the backend service.
+# It is not a standalone Railway service.
+# The backend service (root railway.toml) builds everything it needs.
+[phases.build]
+cmds = ["echo 'Library — not a standalone service'"]
+
+[start]
+cmd = "echo 'Not a service' && exit 0"

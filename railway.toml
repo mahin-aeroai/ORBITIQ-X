@@ -1,6 +1,13 @@
+# ORBITIQ-X — Railway Monorepo Configuration
+# Backend service only — frontend is deployed on Vercel
+
 [build]
 builder = "dockerfile"
 dockerfilePath = "backend/Dockerfile.railway"
+watchPatterns = [
+  "backend/**",
+  "railway.toml"
+]
 
 [deploy]
 healthcheckPath = "/health"
