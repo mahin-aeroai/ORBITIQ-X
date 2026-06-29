@@ -18,6 +18,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0] — Phase 19 — Corpus Expansion
+
+### Added — Phase 19: GraphRAG Corpus Expansion (185 → 252 chunks)
+
+**New Script**: `scripts/corpus_seed_v05.py` — 67 new aerospace knowledge chunks across 11 domains:
+
+New domains (4 entirely new to corpus):
+- **propulsion** (16 chunks): Tsiolkovsky equation, Isp by propellant, Merlin/Raptor engines, Hall thrusters, ion propulsion, solid rockets, cryogenic storage, green propellants, upper stages, nozzle design, combustion instability, engine restart, all-electric satellites, bipropellant systems, thruster catalog
+- **communications** (13 chunks): RF link budget, frequency bands (VHF-Ka), FSO laser comms, modulation/coding, latency (GEO vs LEO), Doppler compensation, antenna types, HTS architecture, inter-satellite links, satellite protocols, TCP over satellite, ground station networks, NB-IoT D2D
+- **earth_observation** (11 chunks): spatial resolution, spectral bands/indices, SAR fundamentals, Copernicus Sentinel constellation, change detection, ocean color, satellite tasking, LiDAR/ICESat-2, thermal IR, precipitation/SWOT, EO analytics/AI pipeline
+- **commercial_space** (9 chunks): New Space business models, rideshare market, space data economy, SPAC transactions, commercial SSA, space insurance, launch pricing trends, on-orbit servicing, EO analytics pipeline
+
+Deepened domains (added to existing 12):
+- orbital_mechanics (7 chunks): orbital transfers, formation flying (CW equations), rendezvous, deorbit strategies, GNSS architecture, coordinate systems, GEO station-keeping
+- space_environment (2 chunks): Van Allen belts, Solar Particle Events
+- spacecraft_operations (2 chunks): thermal control, ADCS
+- standards_protocols (2 chunks): satellite cybersecurity, ITU frequency coordination
+- debris_mitigation (2 chunks): SSN sensors, LEO sustainability frameworks
+- mission_planning (2 chunks): NRHO/Lunar Gateway, lunar navigation
+
+**Upload Script**: `scripts/upload_corpus_v05.py` — batch uploads v0.5 chunks to Qdrant `aerospace_docs` collection
+
+**Updated Corpus Totals**:
+- v0.4 corpus: 185 chunks, 12 domains
+- v0.5 additions: 67 chunks, 4 new domains
+- **Total: 252 chunks, 16 domains**
+
+---
+
 ## [v0.5.0] — Phases 17.7–17.10 — Knowledge Intelligence Layers
 
 ### Added — Phase 17.7: Business Intelligence Layer

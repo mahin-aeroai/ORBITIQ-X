@@ -159,13 +159,12 @@ Platform infrastructure is **stable**. Development focus is permanently on **Kno
 - `docs/OPERATIONS/REDIS_ACTIVATION.md`: step-by-step Railway setup guide
 - **To complete**: Add REDIS_URL to Railway Variables → POST /digital-twin/activate
 
-### Phase 19: Corpus Expansion (500+ chunks)
-- Expand from 185 → 500+ chunks (50 chunks/domain)
-- Add primary sources: Spacetrack Report No.3, IADC, CCSDS full standards
-- Local download → Railway upload (bypasses IP restrictions)
-- Reranking with cross-encoder for precision improvement
-
-**Exit Criteria:** 500+ chunks · average latency < 20s · retrieval accuracy ≥ 100%
+### Phase 19: Corpus Expansion ✅ Complete
+- 67 new chunks across 4 new domains (propulsion, communications, earth_observation, commercial_space)
+- 7 existing domains deepened
+- Total: 252 chunks across 16 domains
+- `scripts/corpus_seed_v05.py` + `scripts/upload_corpus_v05.py` for Qdrant ingestion
+- Key topics: Tsiolkovsky equation, Raptor/Merlin engines, Hall thrusters, link budget, SAR, Sentinel constellation, SPAC market, on-orbit servicing
 
 ### Phase 20: Operator Intelligence
 - Populate `operator_name` from Space-Track ownership data

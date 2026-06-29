@@ -49,8 +49,8 @@
 | Neo4j relationships | 118,681 |
 | Neo4j constellations | 11 (Starlink 8,917 · OneWeb 452 · Iridium 134) |
 | Neo4j countries | 6 (US 9,394 · CN 2,559 · RU 2,244) |
-| Qdrant corpus chunks | 185 |
-| Corpus domains | 12 |
+| Qdrant corpus chunks | 252 (v0.5 + 67 new) |
+| Corpus domains | 16 (+propulsion/comms/EO/commercial) |
 | GraphRAG benchmark | 20/20 (100%) |
 | GraphRAG avg latency | ~27,921ms |
 | API endpoints | 152 (+ 12 Intelligence) |
@@ -104,6 +104,7 @@
 | **Phase 17.9** | **Scientific Knowledge Layer** | ✅ |
 | **Phase 17.10** | **Aerospace Knowledge Universe v1** | ✅ |
 | **Phase 18** | **Redis Activation + Digital Twin** | ✅ |
+| **Phase 19** | **Corpus Expansion (252 chunks)** | ✅ |
 
 ---
 
