@@ -283,8 +283,45 @@ export interface SatelliteDetailState {
   error_code?:      number;
 }
 
-export const fetchSatelliteDetail = (noradId: number): Promise<SatelliteDetailState> =>
-  apiFetch<SatelliteDetailState>(`/digital-twin/state/${noradId}`);
+export const fetchSatelliteDetail = async (noradId: number): Promise<SatelliteDetailState> => {
+  // Primary: catalog endpoint works without Digital Twin being initialized
+  // It returns static TLE/orbital data from PostgreSQL
+  try {
+    const cat = await apiFetch<any>(`/catalog/satellite/${noradId}`);
+    return {
+      norad_id:         cat.norad_id,
+      name:             cat.name,
+      epoch:            cat.tle_epoch ?? "",
+      altitude_km:      cat.apogee_km ?? 0,
+      latitude_deg:     0,
+      longitude_deg:    0,
+      speed_kms:        0,
+      orbital_regime:   cat.regime ?? "UNKNOWN",
+      position_eci_km:  [0, 0, 0],
+      velocity_eci_kms: [0, 0, 0],
+      inclination_deg:  cat.inclination_deg ?? 0,
+      perigee_km:       cat.perigee_km ?? 0,
+      apogee_km:        cat.apogee_km ?? 0,
+      period_min:       cat.period_minutes ?? 0,
+      propagation_ok:   false,
+      object_type:      cat.object_type,
+      // Pass catalog fields through for the drawer
+      cospar_id:              cat.cospar_id,
+      international_designator: cat.cospar_id,
+      country_code:           cat.country_code,
+      operator_name:          cat.operator_name,
+      mission_type:           cat.mission_type,
+      status:                 cat.status,
+      tle_line1:              cat.tle_line1,
+      tle_line2:              cat.tle_line2,
+      tle_age_days:           cat.tle_age_days,
+      tle_source:             cat.tle_source,
+    } as any;
+  } catch {
+    // Fallback: try Digital Twin live state (only works when DT initialized)
+    return apiFetch<SatelliteDetailState>(`/digital-twin/state/${noradId}`);
+  }
+};
 
 
 // ─── Knowledge Graph API types (verified against graph_analytics_service.py) ──
