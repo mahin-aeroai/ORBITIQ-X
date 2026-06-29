@@ -76,6 +76,15 @@ if r.returncode != 0:
     sys.exit(1)
 print("[entrypoint] Migrations complete.", flush=True)
 
+# ── Set PYTHONPATH so 'caem' package is importable ───────────
+# gunicorn runs from /app, so /app/app (backend/app) must be in PYTHONPATH
+# for 'from caem.xxx import ...' to resolve (caem lives at /app/app/caem/)
+import pathlib as _pl
+_app_dir = str(_pl.Path(__file__).parent / "app")
+_py_path = os.environ.get("PYTHONPATH", "")
+os.environ["PYTHONPATH"] = f"{_app_dir}:{_py_path}" if _py_path else _app_dir
+print(f"[entrypoint] PYTHONPATH={os.environ['PYTHONPATH']}", flush=True)
+
 # ── Start gunicorn ────────────────────────────────────────────
 port = os.environ.get("PORT", "8000")
 cmd  = [
