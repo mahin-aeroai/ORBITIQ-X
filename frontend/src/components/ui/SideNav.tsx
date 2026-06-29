@@ -40,7 +40,8 @@ const NAV_GROUPS: { group: string; items: NavItem[] }[] = [
     group: "PLATFORM",
     items: [
       { href: "/foundation",  label: "Foundation Model", icon: "◧", minRole: "admin" },
-      { href: "/system",      label: "Infrastructure",   icon: "⊛", minRole: "analyst" },
+      { href: "/system",         label: "System Status",    icon: "⊛", minRole: "analyst" },
+      { href: "/infrastructure",  label: "Infrastructure",   icon: "⚡", minRole: "admin" },
     ],
   },
 ];

@@ -75,9 +75,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 // ─── API base ────────────────────────────────────────────────────────────────
 
-// API_BASE should be the base URL without /api/v1 suffix
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").split("/api/v1")[0].replace(/\/$/, "");
-const AUTH_URL = `${API_BASE}/api/v1/auth`;
+const AUTH_URL = "/api/v1/auth";
 
 // ─── Provider ────────────────────────────────────────────────────────────────
 

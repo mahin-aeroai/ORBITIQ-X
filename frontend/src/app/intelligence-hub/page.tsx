@@ -14,9 +14,7 @@ import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
-  .split("/api/v1")[0].replace(/\/$/, "");
-const V2 = `${BASE}/api/v2/intelligence`;
+const V2 = "/api/v2/intelligence";
 
 async function apiFetch(path: string) {
   const res = await fetch(`${V2}${path}`);

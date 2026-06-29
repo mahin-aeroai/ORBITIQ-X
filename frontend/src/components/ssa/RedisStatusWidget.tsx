@@ -11,9 +11,7 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
-  .split("/api/v1")[0].replace(/\/$/, "");
-const V1 = `${BASE}/api/v1`;
+const V1 = "/api/v1";
 
 async function apiFetch(path: string, method = "GET") {
   const res = await fetch(`${V1}${path}`, { method });

@@ -1,24 +1,22 @@
 /**
  * ORBITIQ-X — CAEM API Client
- * Phase 17.5
+ * Phase 17.5 — updated Phase 19
  *
- * Typed fetch wrappers for all /api/v2/* CAEM endpoints.
- * Mirrors the pattern in lib/api.ts — same apiFetch helper.
+ * Uses relative /api/v2 URLs so Vercel rewrites handle proxying to Railway.
+ * Never hard-code the Railway URL — let vercel.json rewrites do it.
  */
 
-const BASE = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
-  .split("/api/v1")[0]
-  .replace(/\/$/, "");
-const V2 = `${BASE}/api/v2`;
-
-let _token: string | null = null;
-export function setCaemToken(t: string | null) { _token = t; }
+const V2 = "/api/v2";
 
 async function caemFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("orbitiq_token") ?? ""
+    : "";
+
   const res = await fetch(`${V2}${path}`, {
     headers: {
       "Content-Type": "application/json",
-      ...(_token ? { Authorization: `Bearer ${_token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
     ...init,
@@ -126,10 +124,9 @@ export interface GraphEdge {
   confidence?: number;
 }
 
-// ─── Entity API ───────────────────────────────────────────────────────────────
+// ─── API Methods ──────────────────────────────────────────────────────────────
 
 export const caemApi = {
-  // List entities
   listEntities: (params: {
     entity_class?: string;
     domain?: string;
@@ -137,7 +134,7 @@ export const caemApi = {
     min_confidence?: number;
     page?: number;
     page_size?: number;
-  }) => {
+  } = {}) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
       if (v !== undefined && v !== null) qs.set(k, String(v));
@@ -147,11 +144,9 @@ export const caemApi = {
     );
   },
 
-  // Get full entity
   getEntity: (aqid: string) =>
     caemFetch<EntityFull>(`/entities/${encodeURIComponent(aqid)}`),
 
-  // Get relationships
   getRelationships: (aqid: string, params?: {
     direction?: string;
     category?: string;
@@ -163,38 +158,30 @@ export const caemApi = {
     );
   },
 
-  // Get graph neighborhood
   getNeighborhood: (aqid: string, depth = 2) =>
     caemFetch<NeighborhoodGraph>(
       `/entities/${encodeURIComponent(aqid)}/neighborhood?depth=${depth}`
     ),
 
-  // Full-text search
   searchEntities: (q: string, entity_class?: string) => {
     const qs = new URLSearchParams({ q });
     if (entity_class) qs.set("entity_class", entity_class);
-    return caemFetch<{ results: EntitySummary[]; count: number }>(`/entities/search/fulltext?${qs}`);
+    return caemFetch<{ results: EntitySummary[]; count: number }>(
+      `/entities/search/fulltext?${qs}`
+    );
   },
 
-  // Refresh AI summary
   refreshSummary: (aqid: string) =>
     caemFetch(`/entities/${encodeURIComponent(aqid)}/refresh-summary`, { method: "POST" }),
 
-  // Relationship ontology
   getOntology: (category?: string) => {
     const qs = category ? `?category=${category}` : "";
     return caemFetch<unknown[]>(`/relationships/ontology${qs}`);
   },
 
-  // Temporal snapshot
-  getTemporalSnapshot: (aqid: string, snapshot_date: string) =>
-    caemFetch(`/relationships/snapshot/${encodeURIComponent(aqid)}?snapshot_date=${snapshot_date}`),
-
-  // Provenance facts
   getEntityFacts: (aqid: string) =>
     caemFetch(`/provenance/${encodeURIComponent(aqid)}/facts`),
 
-  // Version snapshots
   getSnapshots: (aqid: string) =>
     caemFetch(`/provenance/${encodeURIComponent(aqid)}/snapshots`),
 };

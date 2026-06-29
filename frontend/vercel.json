@@ -3,6 +3,10 @@
     {
       "source": "/api/v1/:path*",
       "destination": "https://orbitiq-x-production.up.railway.app/api/v1/:path*"
+    },
+    {
+      "source": "/api/v2/:path*",
+      "destination": "https://orbitiq-x-production.up.railway.app/api/v2/:path*"
     }
   ],
   "headers": [
