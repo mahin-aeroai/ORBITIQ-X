@@ -25,6 +25,16 @@ depends_on    = None
 
 
 def upgrade() -> None:
+    # Idempotent guard: tables may already exist if 0011 ran but version write failed
+    from sqlalchemy import text as _sql_text
+    _bind = op.get_bind()
+    _exists = _bind.execute(_sql_text(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+        "WHERE table_schema='public' AND table_name='relationship_ontology')"
+    )).scalar()
+    if _exists:
+        return  # Tables already created, let Alembic update version
+
 
     # ------------------------------------------------------------------
     # 1. RELATIONSHIP ONTOLOGY — full formal registry
