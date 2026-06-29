@@ -33,6 +33,24 @@ if db_url:
     except Exception as e:
         print(f"[entrypoint] WARNING: URL parse error: {e}", flush=True)
 
+# ── Pre-migration: widen alembic_version.version_num ─────────
+# Railway PostgreSQL default is VARCHAR(32). Our revision IDs are up to 35 chars.
+# Run the ALTER outside of Alembic so it commits before any migration runs.
+print("[entrypoint] Widening alembic_version.version_num to VARCHAR(64)...", flush=True)
+try:
+    import psycopg2
+    _conn = psycopg2.connect(db_url)
+    _conn.autocommit = True
+    _cur = _conn.cursor()
+    # Widen the column (idempotent — no-op if already wide enough)
+    _cur.execute("ALTER TABLE IF EXISTS alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)")
+    _cur.close()
+    _conn.close()
+    print("[entrypoint] alembic_version.version_num widened OK", flush=True)
+except Exception as _e:
+    # Table may not exist yet on first deploy — that's fine, Alembic will create it
+    print(f"[entrypoint] version_num widen skipped: {_e}", flush=True)
+
 # ── Run migrations ────────────────────────────────────────────
 print("[entrypoint] Running migrations...", flush=True)
 print(f"[entrypoint] DATABASE_URL = {db_url[:60]}..." if db_url else "[entrypoint] DATABASE_URL not set!", flush=True)

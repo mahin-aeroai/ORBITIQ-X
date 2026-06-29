@@ -31,9 +31,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # ── Widen alembic_version.version_num (Railway PostgreSQL default is VARCHAR(32))
-    # Our revision IDs exceed 32 chars — widen to 64 before Alembic writes the version.
-    op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(64)")
+    # Note: alembic_version.version_num is widened to VARCHAR(64) in entrypoint.sh
+    # before alembic runs, so long revision IDs are safe to use.
     
     # Check if 0011 tables already exist (migration may have partially run before)
     # If aerospace_entities exists, all tables from this migration were created
