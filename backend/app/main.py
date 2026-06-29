@@ -6,16 +6,6 @@ health checks, and API router registration.
 """
 from __future__ import annotations
 
-import sys
-import os as _os
-# Ensure backend/app is in sys.path so 'caem', 'app' subpackages are importable
-_APP_DIR = _os.path.dirname(_os.path.abspath(__file__))
-_BACKEND_DIR = _os.path.dirname(_APP_DIR)
-for _p in [_APP_DIR, _BACKEND_DIR]:
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-del _APP_DIR, _BACKEND_DIR, _p
-
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
