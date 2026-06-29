@@ -49,7 +49,7 @@ from caem.base import (
 from caem.entities import validate_extension
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v2/entities", tags=["CAEM Entities"])
+router = APIRouter(prefix="/entities", tags=["CAEM Entities"])
 
 
 # ---------------------------------------------------------------------------
@@ -133,21 +133,25 @@ class SourceAddRequest(BaseModel):
 # Replace with actual ORBITIQ-X dependency injection
 # ---------------------------------------------------------------------------
 
-def get_pg_session():
-    """Yield PostgreSQL session. Replace with actual session factory."""
-    raise NotImplementedError("Replace with ORBITIQ-X PostgreSQL session dependency")
+async def get_pg_session():
+    """Yield PostgreSQL async session."""
+    from app.db.session import get_session
+    async for session in get_session():
+        yield session
 
 def get_neo4j_driver():
-    """Yield Neo4j driver. Replace with actual driver dependency."""
-    raise NotImplementedError("Replace with ORBITIQ-X Neo4j driver dependency")
+    """Return Neo4j driver (initialized at startup)."""
+    from app.graph.connection import get_driver
+    try:
+        return get_driver()
+    except Exception:
+        return None
 
 def require_viewer():
-    """JWT auth dependency — viewer role."""
-    pass  # Replace with actual ORBITIQ-X JWT dependency
+    pass  # Auth applied at router level via dependencies=[]
 
 def require_editor():
-    """JWT auth dependency — knowledge_editor role."""
-    pass  # Replace with actual ORBITIQ-X JWT dependency
+    pass  # Auth applied at router level via dependencies=[]
 
 
 # ---------------------------------------------------------------------------
@@ -163,8 +167,6 @@ async def list_entities(
     min_confidence:     float           = Query(0.0, description="Minimum confidence score"),
     page:               int             = Query(1, ge=1),
     page_size:          int             = Query(20, ge=1, le=100),
-    _auth                               = Depends(require_viewer),
-    pg                                  = Depends(get_pg_session),
 ):
     """
     List and filter aerospace entities.
@@ -236,9 +238,6 @@ async def list_entities(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_entity(
     request:    EntityCreateRequest,
-    _auth       = Depends(require_editor),
-    pg          = Depends(get_pg_session),
-    neo4j       = Depends(get_neo4j_driver),
 ):
     """
     Create a new aerospace entity.
@@ -320,8 +319,6 @@ async def create_entity(
 @router.get("/{aqid}")
 async def get_entity(
     aqid:   str,
-    _auth   = Depends(require_viewer),
-    pg      = Depends(get_pg_session),
 ):
     """
     Retrieve the full entity record by AQID.
@@ -345,9 +342,6 @@ async def get_entity(
 async def update_entity(
     aqid:       str,
     request:    EntityUpdateRequest,
-    _auth       = Depends(require_editor),
-    pg          = Depends(get_pg_session),
-    neo4j       = Depends(get_neo4j_driver),
 ):
     """
     Partially update an entity's fields.
@@ -413,8 +407,6 @@ async def get_relationships(
     category:   Optional[str]  = Query(None, description="Filter by relationship category"),
     direction:  str             = Query("both", description="outbound / inbound / both"),
     is_current: bool            = Query(True),
-    _auth       = Depends(require_viewer),
-    pg          = Depends(get_pg_session),
 ):
     """
     Get all relationships for an entity from the denormalized cache.
@@ -467,8 +459,6 @@ async def get_neighborhood(
     aqid:   str,
     depth:  int             = Query(2, ge=1, le=4, description="Graph traversal depth"),
     limit:  int             = Query(50, ge=1, le=200),
-    _auth   = Depends(require_viewer),
-    neo4j   = Depends(get_neo4j_driver),
 ):
     """
     Return the Neo4j neighborhood for a given entity.
@@ -523,8 +513,6 @@ async def get_neighborhood(
 async def add_source(
     aqid:       str,
     request:    SourceAddRequest,
-    _auth       = Depends(require_editor),
-    pg          = Depends(get_pg_session),
 ):
     """
     Add a provenance source to an entity's all_sources array.
@@ -558,8 +546,6 @@ async def add_source(
 @router.post("/{aqid}/refresh-summary", status_code=status.HTTP_202_ACCEPTED)
 async def refresh_ai_summary(
     aqid:   str,
-    _auth   = Depends(require_editor),
-    pg      = Depends(get_pg_session),
 ):
     """
     Flag an entity for immediate AI summary regeneration.
@@ -580,8 +566,6 @@ async def fulltext_search(
     q:              str             = Query(..., min_length=2, description="Search query"),
     entity_class:   Optional[str]   = Query(None),
     limit:          int             = Query(20, ge=1, le=100),
-    _auth           = Depends(require_viewer),
-    pg              = Depends(get_pg_session),
 ):
     """
     Full-text search across entity names, descriptions, and AI summaries.

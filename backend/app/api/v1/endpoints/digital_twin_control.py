@@ -40,7 +40,7 @@ async def get_redis_status():
 
 
 @router.post("/redis-reconnect")
-async def trigger_redis_reconnect(_auth = Depends(require_operator)):
+async def trigger_redis_reconnect():
     """
     Manually trigger a Redis reconnection attempt.
     Useful after adding REDIS_URL to Railway Variables.
@@ -137,7 +137,6 @@ async def get_digital_twin_status():
 @router.post("/activate")
 async def activate_digital_twin(
     background: BackgroundTasks,
-    _auth       = Depends(require_operator),
 ):
     """
     Trigger an immediate Digital Twin propagation cycle.
@@ -193,7 +192,6 @@ async def activate_digital_twin(
 async def get_live_positions(
     regime: Optional[str] = Query(None, description="Filter by orbital regime: LEO/MEO/GEO/HEO/SSO"),
     limit:  int           = Query(100, ge=1, le=1000),
-    _auth                 = Depends(require_operator),
 ):
     """
     Return a sample of currently propagated satellite positions.
@@ -268,7 +266,6 @@ async def get_live_positions(
 async def trigger_catalog_sync(
     background: BackgroundTasks,
     mode:       str = Query("incremental", description="full or incremental"),
-    _auth           = Depends(require_operator),
 ):
     """
     Trigger a catalog sync (TLE refresh from Space-Track) followed by

@@ -182,6 +182,30 @@ api_v1_router.include_router(
     dependencies=[_analyst],
 )
 
+# ─── CAEM Entities (Phase 17.1 / 17.5) ──────────────────────────────────────
+from app.api.v1.endpoints.entities import router as entities_router  # noqa: E402
+api_v1_router.include_router(
+    entities_router,
+    tags=["CAEM — Entities"],
+    dependencies=[_analyst],
+)
+
+# ─── CAEM Provenance (Phase 17.3) ────────────────────────────────────────────
+from app.api.v1.endpoints.provenance import router as provenance_router  # noqa: E402
+api_v1_router.include_router(
+    provenance_router,
+    tags=["CAEM — Provenance"],
+    dependencies=[_analyst],
+)
+
+# ─── CAEM Ingestion (Phase 17.4) ─────────────────────────────────────────────
+from app.api.v1.endpoints.ingestion import router as ingestion_router  # noqa: E402
+api_v1_router.include_router(
+    ingestion_router,
+    tags=["CAEM — Ingestion"],
+    dependencies=[_admin],
+)
+
 # ─── CDM Document (separate path) ────────────────────────────────────────────
 # CDM endpoint is under /conjunctions/cdm/{id} but also exposed at /cdm/{id}
 # for direct document retrieval by external tools.
@@ -194,5 +218,16 @@ api_v1_router.include_router(
     dependencies=[_operator],        # FIX H-01: was missing, exposed /cdm unauthenticated
     include_in_schema=False,         # avoid duplicate docs, real route is on /conjunctions
 )
-api_router.include_router(digital_twin_control_router)
-api_router.include_router(knowledge_intelligence_router)
+# ─── Digital Twin Control (Phase 18) ────────────────────────────────────────
+api_v1_router.include_router(
+    digital_twin_control_router,
+    tags=["Digital Twin Control"],
+    dependencies=[_operator],
+)
+
+# ─── Knowledge Intelligence (Phases 17.7-17.10) ──────────────────────────────
+api_v1_router.include_router(
+    knowledge_intelligence_router,
+    tags=["Knowledge Intelligence"],
+    dependencies=[_analyst],
+)

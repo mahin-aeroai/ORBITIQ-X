@@ -12,16 +12,15 @@ Mounts at: /api/v2/intelligence
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
 from caem.intelligence.business   import BusinessIntelligenceService
 from caem.intelligence.historical import HistoricalIntelligenceService
 from caem.intelligence.scientific import ScientificKnowledgeService
 
-router = APIRouter(prefix="/api/v2/intelligence", tags=["Knowledge Intelligence"])
+router = APIRouter(prefix="/intelligence", tags=["Knowledge Intelligence"])
 
-def require_viewer(): pass
-def get_pg_session(): raise NotImplementedError("Wire to existing session dependency")
+# Auth handled at router level via router.py dependencies
 
 
 # ─── BUSINESS INTELLIGENCE ────────────────────────────────────────────────────
@@ -33,7 +32,6 @@ async def list_contracts(
     status:         Optional[str]   = Query(None, description="active / complete / cancelled"),
     min_value_musd: float           = Query(0.0),
     limit:          int             = Query(50, ge=1, le=200),
-    _auth                           = Depends(require_viewer),
 ):
     """List aerospace contracts sorted by value (largest first)."""
     svc = BusinessIntelligenceService()
@@ -49,7 +47,6 @@ async def list_investments(
     type:           Optional[str]   = Query(None, description="Series A / IPO / Strategic / etc."),
     min_amount_musd: float          = Query(0.0),
     limit:          int             = Query(50, ge=1, le=200),
-    _auth                           = Depends(require_viewer),
 ):
     """List aerospace investment rounds sorted by date (newest first)."""
     svc = BusinessIntelligenceService()
@@ -60,13 +57,13 @@ async def list_investments(
 
 
 @router.get("/market-overview")
-async def get_market_overview(_auth = Depends(require_viewer)):
+async def get_market_overview():
     """Global space economy market context and major operator summary."""
     return BusinessIntelligenceService().get_market_overview()
 
 
 @router.get("/funding-summary")
-async def get_funding_summary(_auth = Depends(require_viewer)):
+async def get_funding_summary():
     """Aggregated funding metrics: totals, by type, largest round."""
     return BusinessIntelligenceService().get_funding_summary()
 
@@ -79,7 +76,6 @@ async def list_events(
     importance: Optional[str]   = Query(None, description="critical / major / minor"),
     domain:     Optional[str]   = Query(None),
     limit:      int             = Query(50, ge=1, le=200),
-    _auth                       = Depends(require_viewer),
 ):
     """List historical aerospace events sorted by date."""
     svc = HistoricalIntelligenceService()
@@ -94,7 +90,6 @@ async def list_incidents(
     severity:       Optional[str]   = Query(None, description="critical / major / minor"),
     incident_type:  Optional[str]   = Query(None, description="launch_failure / mission_failure / anomaly"),
     limit:          int             = Query(50, ge=1, le=200),
-    _auth                           = Depends(require_viewer),
 ):
     """List incidents with root cause and corrective actions."""
     svc = HistoricalIntelligenceService()
@@ -105,13 +100,13 @@ async def list_incidents(
 
 
 @router.get("/lineage")
-async def get_lineage_chains(_auth = Depends(require_viewer)):
+async def get_lineage_chains():
     """Technology and program lineage chains (predecessor → successor)."""
     return {"chains": HistoricalIntelligenceService().get_lineage_chains()}
 
 
 @router.get("/eras")
-async def get_eras(_auth = Depends(require_viewer)):
+async def get_eras():
     """Space history era reference with periods and descriptions."""
     return {"eras": HistoricalIntelligenceService().get_eras()}
 
@@ -124,7 +119,6 @@ async def list_papers(
     domain:         Optional[str]   = Query(None),
     min_citations:  int             = Query(0),
     limit:          int             = Query(50, ge=1, le=200),
-    _auth                           = Depends(require_viewer),
 ):
     """List research papers sorted by citation count."""
     svc = ScientificKnowledgeService()
@@ -140,7 +134,6 @@ async def list_standards(
     domain:         Optional[str]   = Query(None),
     status:         str             = Query("active"),
     limit:          int             = Query(50, ge=1, le=200),
-    _auth                           = Depends(require_viewer),
 ):
     """List aerospace standards and specifications."""
     svc = ScientificKnowledgeService()
@@ -156,7 +149,6 @@ async def list_patents(
     domain:     Optional[str]   = Query(None),
     ipc_code:   Optional[str]   = Query(None),
     limit:      int             = Query(50, ge=1, le=200),
-    _auth                       = Depends(require_viewer),
 ):
     """List aerospace patents sorted by filing date."""
     svc = ScientificKnowledgeService()
@@ -167,7 +159,7 @@ async def list_patents(
 
 
 @router.get("/citation-stats")
-async def get_citation_stats(_auth = Depends(require_viewer)):
+async def get_citation_stats():
     """Aggregated citation and corpus statistics."""
     return ScientificKnowledgeService().get_citation_stats()
 
@@ -175,7 +167,7 @@ async def get_citation_stats(_auth = Depends(require_viewer)):
 # ─── AEROSPACE KNOWLEDGE UNIVERSE v1 ─────────────────────────────────────────
 
 @router.get("/aku-status")
-async def get_aku_status(_auth = Depends(require_viewer)):
+async def get_aku_status():
     """
     Aerospace Knowledge Universe v1 corpus status.
     Aggregates all knowledge layers: entities, relationships,

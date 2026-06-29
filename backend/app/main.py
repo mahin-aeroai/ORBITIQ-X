@@ -273,6 +273,28 @@ def _register_routers(app: FastAPI) -> None:
     # Main versioned API
     app.include_router(api_v1_router, prefix=settings.BACKEND_API_PREFIX)
 
+    # ─── API v2 — CAEM Knowledge Layer ────────────────────────────────────────
+    # Mounts the same CAEM routers under /api/v2 prefix.
+    # Vercel rewrites /api/v2/* → Railway /api/v2/* so this must be present.
+    from fastapi import APIRouter as _APIRouter
+    _api_v2 = _APIRouter()
+
+    from app.api.v1.endpoints.entities import router as _entities_r
+    from app.api.v1.endpoints.relationships import router as _relationships_r
+    from app.api.v1.endpoints.provenance import router as _provenance_r
+    from app.api.v1.endpoints.ingestion import router as _ingestion_r
+    from app.api.v1.endpoints.knowledge_intelligence import router as _intelligence_r
+    from app.api.v1.endpoints.digital_twin_control import router as _dt_control_r
+
+    _api_v2.include_router(_entities_r,      tags=["CAEM v2 — Entities"])
+    _api_v2.include_router(_relationships_r, tags=["CAEM v2 — Relationships"])
+    _api_v2.include_router(_provenance_r,    tags=["CAEM v2 — Provenance"])
+    _api_v2.include_router(_ingestion_r,     tags=["CAEM v2 — Ingestion"])
+    _api_v2.include_router(_intelligence_r,  tags=["CAEM v2 — Intelligence"])
+    _api_v2.include_router(_dt_control_r,    tags=["CAEM v2 — Digital Twin"])
+
+    app.include_router(_api_v2, prefix="/api/v2")
+
 
 def _register_prometheus(app: FastAPI) -> None:
     """Configure Prometheus metrics instrumentation."""

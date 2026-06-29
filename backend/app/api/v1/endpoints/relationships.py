@@ -44,7 +44,7 @@ from caem.graph.neo4j_relationship_schema import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v2/relationships", tags=["CAEM Relationships"])
+router = APIRouter(prefix="/relationships", tags=["CAEM Relationships"])
 
 
 # ---------------------------------------------------------------------------
@@ -99,54 +99,35 @@ class RelationshipValidateResponse(BaseModel):
     confidence_floor:   Optional[float]
 
 
-# ---------------------------------------------------------------------------
-# DEPENDENCY STUBS — wire to existing ORBITIQ-X dependencies
-# ---------------------------------------------------------------------------
 
-def get_pg_session():
-    raise NotImplementedError("Replace with ORBITIQ-X PostgreSQL session dependency")
+async def get_pg_session():
+    from app.db.session import get_session
+    async for session in get_session():
+        yield session
 
 def get_neo4j_driver():
-    raise NotImplementedError("Replace with ORBITIQ-X Neo4j driver dependency")
+    from app.graph.connection import get_driver
+    try:
+        return get_driver()
+    except Exception:
+        return None
 
-def require_viewer():
-    pass
+def get_qdrant_client():
+    try:
+        from app.db.qdrant_session import get_qdrant
+        return get_qdrant()
+    except Exception:
+        return None
 
-def require_editor():
-    pass
+def require_viewer(): pass
+def require_editor(): pass
+def require_admin(): pass
 
-
-# ---------------------------------------------------------------------------
-# HELPERS
-# ---------------------------------------------------------------------------
-
-def _defn_to_response(defn: RelationshipDefinition) -> RelationshipDefinitionResponse:
-    return RelationshipDefinitionResponse(
-        rel_type        = defn.rel_type.value,
-        category        = defn.category,
-        description     = defn.description,
-        direction_note  = defn.direction_note,
-        cardinality     = defn.cardinality.value,
-        allowed_sources = [c.value for c in defn.allowed_sources],
-        allowed_targets = [c.value for c in defn.allowed_targets],
-        temporal        = defn.temporal,
-        temporal_note   = defn.temporal_note,
-        confidence_floor= defn.confidence_floor,
-        is_bidirectional= defn.is_bidirectional,
-        display_label   = defn.display_label,
-        inverse_label   = defn.inverse_label,
-    )
-
-
-# ---------------------------------------------------------------------------
-# ENDPOINTS
-# ---------------------------------------------------------------------------
 
 @router.get("/ontology", response_model=List[RelationshipDefinitionResponse])
 async def list_ontology(
     category:   Optional[str] = Query(None, description="Filter by category"),
     temporal:   Optional[bool] = Query(None, description="Filter to temporal relationships only"),
-    _auth = Depends(require_viewer),
 ):
     """
     Return the complete Universal Relationship Ontology.
@@ -163,7 +144,7 @@ async def list_ontology(
 
 
 @router.get("/ontology/categories")
-async def list_categories(_auth = Depends(require_viewer)):
+async def list_categories():
     """Return all relationship categories with counts."""
     from collections import Counter
     cats = Counter(d.category for d in RELATIONSHIP_REGISTRY.values())
@@ -179,7 +160,6 @@ async def list_categories(_auth = Depends(require_viewer)):
 @router.get("/ontology/{rel_type}", response_model=RelationshipDefinitionResponse)
 async def get_ontology_entry(
     rel_type:   str,
-    _auth = Depends(require_viewer),
 ):
     """Return the formal definition for a single relationship type."""
     try:
@@ -197,7 +177,6 @@ async def get_ontology_entry(
 async def get_ontology_for_class(
     entity_class:   str,
     as_source:      bool = Query(True, description="As source (True) or target (False)"),
-    _auth = Depends(require_viewer),
 ):
     """Return all valid relationship types for a given entity class."""
     try:
@@ -217,7 +196,6 @@ async def get_ontology_for_class(
 @router.post("/validate", response_model=RelationshipValidateResponse)
 async def validate_relationship(
     request: RelationshipValidateRequest,
-    _auth = Depends(require_viewer),
 ):
     """
     Validate a proposed relationship before creation.
@@ -275,9 +253,6 @@ async def validate_relationship(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_relationship(
     request:    RelationshipCreateRequest,
-    _auth = Depends(require_editor),
-    pg = Depends(get_pg_session),
-    neo4j = Depends(get_neo4j_driver),
 ):
     """
     Create a relationship between two entities.
@@ -376,8 +351,6 @@ async def create_relationship(
 async def get_temporal_snapshot_endpoint(
     aqid:           str,
     snapshot_date:  str = Query(..., description="ISO date: YYYY-MM-DD"),
-    _auth = Depends(require_viewer),
-    neo4j = Depends(get_neo4j_driver),
 ):
     """
     Return all relationships that were active for an entity at a specific date.
@@ -407,8 +380,6 @@ async def execute_traversal(
     aqid:       str = Query(..., description="Center entity AQID"),
     depth:      int = Query(2, ge=1, le=4),
     limit:      int = Query(100, ge=1, le=500),
-    _auth = Depends(require_viewer),
-    neo4j = Depends(get_neo4j_driver),
 ):
     """
     Execute a named traversal pattern from the CAEM traversal library.
@@ -458,7 +429,7 @@ async def execute_traversal(
 
 
 @router.get("/traversal")
-async def list_traversal_patterns(_auth = Depends(require_viewer)):
+async def list_traversal_patterns():
     """Return all available named traversal patterns."""
     return {
         "patterns": list(TRAVERSAL_LIBRARY.keys()),
@@ -470,9 +441,6 @@ async def list_traversal_patterns(_auth = Depends(require_viewer)):
 async def soft_delete_relationship(
     rel_id:     str,
     reason:     Optional[str] = Query(None),
-    _auth = Depends(require_editor),
-    pg = Depends(get_pg_session),
-    neo4j = Depends(get_neo4j_driver),
 ):
     """
     Soft-delete a relationship by setting is_current=False in Neo4j and the cache.

@@ -30,45 +30,36 @@ from pydantic import BaseModel
 from caem.ingestion.orchestrator import ADAPTER_REGISTRY
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v2/ingestion", tags=["Knowledge Ingestion"])
+router = APIRouter(prefix="/ingestion", tags=["Knowledge Ingestion"])
 
 
-# ---------------------------------------------------------------------------
-# DEPENDENCY STUBS
-# ---------------------------------------------------------------------------
 
-def get_pg_session():
-    raise NotImplementedError("Wire to ORBITIQ-X PostgreSQL session dependency")
+async def get_pg_session():
+    from app.db.session import get_session
+    async for session in get_session():
+        yield session
 
 def get_neo4j_driver():
-    raise NotImplementedError("Wire to ORBITIQ-X Neo4j driver dependency")
+    from app.graph.connection import get_driver
+    try:
+        return get_driver()
+    except Exception:
+        return None
 
 def get_qdrant_client():
-    raise NotImplementedError("Wire to ORBITIQ-X Qdrant client dependency")
+    try:
+        from app.db.qdrant_session import get_qdrant
+        return get_qdrant()
+    except Exception:
+        return None
 
-def require_admin():
-    pass  # Replace with admin JWT dependency
+def require_viewer(): pass
+def require_editor(): pass
+def require_admin(): pass
 
-
-# ---------------------------------------------------------------------------
-# REQUEST MODELS
-# ---------------------------------------------------------------------------
-
-class AdapterConfigUpdate(BaseModel):
-    fetch_interval_s:    Optional[int]              = None
-    max_records_per_run: Optional[int]              = None
-    is_enabled:          Optional[bool]             = None
-    notes:               Optional[str]              = None
-
-
-# ---------------------------------------------------------------------------
-# ENDPOINTS
-# ---------------------------------------------------------------------------
 
 @router.get("/adapters")
-async def list_adapters(
-    _auth   = Depends(require_admin),
-    pg      = Depends(get_pg_session),
+async def list_adapters(,
 ):
     """List all registered source adapters with their current schedule state."""
     rows = pg.execute("""
@@ -92,8 +83,6 @@ async def list_adapters(
 @router.get("/adapters/{adapter_name}")
 async def get_adapter(
     adapter_name:   str,
-    _auth           = Depends(require_admin),
-    pg              = Depends(get_pg_session),
 ):
     """Get detailed status for a single adapter including recent run history."""
     config = pg.execute(
@@ -124,10 +113,6 @@ async def get_adapter(
 async def trigger_run(
     adapter_name:   str,
     background:     BackgroundTasks,
-    _auth           = Depends(require_admin),
-    pg              = Depends(get_pg_session),
-    neo4j           = Depends(get_neo4j_driver),
-    qdrant          = Depends(get_qdrant_client),
 ):
     """
     Trigger a manual ingestion run for a specific adapter.
@@ -167,9 +152,7 @@ async def trigger_run(
 
 
 @router.get("/schedule")
-async def get_schedule(
-    _auth   = Depends(require_admin),
-    pg      = Depends(get_pg_session),
+async def get_schedule(,
 ):
     """Return full ingestion schedule status for all adapters."""
     rows = pg.execute("""
@@ -204,8 +187,6 @@ async def get_ingestion_log(
     adapter_name:   Optional[str]   = Query(None),
     status:         Optional[str]   = Query(None),
     limit:          int             = Query(50, ge=1, le=200),
-    _auth           = Depends(require_admin),
-    pg              = Depends(get_pg_session),
 ):
     """Return recent ingestion run history."""
     where = []
@@ -236,8 +217,6 @@ async def get_ingestion_log(
 @router.get("/log/{job_id}")
 async def get_job_result(
     job_id: str,
-    _auth   = Depends(require_admin),
-    pg      = Depends(get_pg_session),
 ):
     """Return the full result for a specific ingestion job."""
     row = pg.execute(
@@ -255,8 +234,6 @@ async def get_job_result(
 async def update_adapter_config(
     adapter_name:   str,
     request:        AdapterConfigUpdate,
-    _auth           = Depends(require_admin),
-    pg              = Depends(get_pg_session),
 ):
     """Update adapter configuration (interval, limits, enabled state)."""
     existing = pg.execute(
@@ -294,8 +271,6 @@ async def update_adapter_config(
 @router.post("/adapters/{adapter_name}/enable")
 async def enable_adapter(
     adapter_name:   str,
-    _auth           = Depends(require_admin),
-    pg              = Depends(get_pg_session),
 ):
     pg.execute(
         "UPDATE ingestion_source_config SET is_enabled = true WHERE adapter_name = :name",
@@ -307,8 +282,6 @@ async def enable_adapter(
 @router.post("/adapters/{adapter_name}/disable")
 async def disable_adapter(
     adapter_name:   str,
-    _auth           = Depends(require_admin),
-    pg              = Depends(get_pg_session),
 ):
     pg.execute(
         "UPDATE ingestion_source_config SET is_enabled = false WHERE adapter_name = :name",
