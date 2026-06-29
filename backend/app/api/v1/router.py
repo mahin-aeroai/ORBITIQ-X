@@ -21,6 +21,7 @@ Access matrix (Phase 14A)
 """
 from fastapi import APIRouter, Depends
 
+from app.api.v1.endpoints.knowledge_intelligence import router as knowledge_intelligence_router
 from app.api.v1.endpoints.digital_twin_control import router as digital_twin_control_router
 from app.api.v1.endpoints import (
     satellites,
@@ -194,3 +195,4 @@ api_v1_router.include_router(
     include_in_schema=False,         # avoid duplicate docs, real route is on /conjunctions
 )
 api_router.include_router(digital_twin_control_router)
+api_router.include_router(knowledge_intelligence_router)

@@ -53,9 +53,9 @@
 | Corpus domains | 12 |
 | GraphRAG benchmark | 20/20 (100%) |
 | GraphRAG avg latency | ~27,921ms |
-| API endpoints | 140 (103 + 9 CAEM + 10 Rel + 9 Prov + 9 Ingest) |
+| API endpoints | 152 (+ 12 Intelligence) |
 | Alembic migrations | 14 |
-| Frontend pages | 12 (+ entities browser + entity detail) |
+| Frontend pages | 13 (+ Intelligence Hub) |
 | CAEM entity classes | 39 |
 | CAEM relationship types | 76 |
 | CAEM extension schemas | 31 |
@@ -99,6 +99,10 @@
 | **Phase 17.4** | **Knowledge Ingestion Framework** | ✅ |
 | **Phase 17.5** | **Reusable Entity Intelligence Pages** | ✅ |
 | **Phase 17.6** | **Cross-Entity Navigation** | ✅ |
+| **Phase 17.7** | **Business Intelligence Layer** | ✅ |
+| **Phase 17.8** | **Historical Intelligence Layer** | ✅ |
+| **Phase 17.9** | **Scientific Knowledge Layer** | ✅ |
+| **Phase 17.10** | **Aerospace Knowledge Universe v1** | ✅ |
 | **Phase 18** | **Redis Activation + Digital Twin** | ✅ |
 
 ---

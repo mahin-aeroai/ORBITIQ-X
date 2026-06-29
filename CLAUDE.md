@@ -59,9 +59,9 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 
 ## Current Phase
 
-**Phase 18 — Redis Activation + Digital Twin** ✅ Complete
+**Phases 17.7–17.10 — Knowledge Intelligence Layers** ✅ Complete
 
-**Next: Phase 19 — Corpus Expansion**
+**Next: Phase 18 — Redis Activation** (add REDIS_URL to Railway)
 
 All 76 relationship types formalized. Completed:
 - `relationship_ontology` table: 76 types with cardinality, direction, temporal rules

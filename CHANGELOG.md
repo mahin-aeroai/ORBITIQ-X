@@ -18,6 +18,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v0.5.0] — Phases 17.7–17.10 — Knowledge Intelligence Layers
+
+### Added — Phase 17.7: Business Intelligence Layer
+
+**Service** (`backend/app/caem/intelligence/business.py`)
+- `BusinessIntelligenceService`: contract portfolio, investment timeline, market overview, funding summary
+- Seed data — 5 major contracts ($12.2B total): NASA CRS-2/SpaceX, NASA HLS/SpaceX, NSSL/ULA, NSSL/SpaceX, ESA Ariane 6
+- Seed data — 5 investments ($2.5B total): SpaceX Series N, AST SpaceMobile IPO, Planet Series D, Rocket Lab Series E, OneWeb rescue
+- Global space economy market context (Space Foundation 2022: $469B, 74% commercial)
+
+### Added — Phase 17.8: Historical Intelligence Layer
+
+**Service** (`backend/app/caem/intelligence/historical.py`)
+- `HistoricalIntelligenceService`: events, incidents, lineage chains, era reference
+- Seed data — 7 historical events: Sputnik 1957, NASA founding, Apollo 11, Challenger, Columbia, ISS assembly, Commercial Crew 2020
+- Seed data — 3 incidents with root cause + corrective actions: Ariane 5 Flight 501 (software), Mars Climate Orbiter (units), Falcon 9 CRS-7 (strut)
+- 2 lineage chains: Saturn V → SLS, Falcon 1 → Falcon 9 → Starship
+- 5 eras: Space Race / Post-Apollo / Shuttle Era / Post-Cold War / Commercial Era
+
+### Added — Phase 17.9: Scientific Knowledge Layer
+
+**Service** (`backend/app/caem/intelligence/scientific.py`)
+- `ScientificKnowledgeService`: papers, standards, patents, citation stats
+- Seed data — 5 papers (5,475 total citations): Kessler 1978 (2,847 cit.), SGP4 Vallado 2006, Hohmann 1925, Iridium-Cosmos collision, Starlink mega-constellation risk
+- Seed data — 5 standards: CCSDS 727.0-B-5 (CFDP), CCSDS 131.0-B-3 (TM link), IADC debris mitigation, ISO 24113:2019, ECSS-E-ST-10-04C
+- Seed data — 3 patents: SpaceX booster return, SpaceX Starlink constellation, Boeing all-electric GEO
+
+### Added — Phase 17.10: Aerospace Knowledge Universe v1
+
+**Unified API** (`backend/app/api/v1/endpoints/knowledge_intelligence.py`)
+12 endpoints at `/api/v2/intelligence`:
+  - BI: `GET /contracts`, `/investments`, `/market-overview`, `/funding-summary`
+  - Historical: `GET /events`, `/incidents`, `/lineage`, `/eras`
+  - Scientific: `GET /papers`, `/standards`, `/patents`, `/citation-stats`
+  - AKU: `GET /aku-status` — full corpus summary across all 10 knowledge layers
+
+**Frontend** (`frontend/src/app/intelligence-hub/page.tsx`)
+- Tabbed intelligence dashboard: AKU Status · Contracts · Investments · Historical Events · Incidents · Research Papers · Standards
+- AKU Status: 12-metric corpus grid + 10-layer status panel (all ✅ Complete)
+- Contracts: value chips, client→recipient, status, scope preview
+- Investments: round type badge, year, investors, valuation
+- Events: importance dot (critical red/major indigo/minor slate), era badge, description
+- Incidents: severity badge, root cause, financial loss
+- Papers: citation count, authors, DOI link
+- Standards: issuing body badge, description
+
+**Navigation**: "◈ Knowledge Universe" added to SideNav after Entity Browser
+
+---
+
 ## [v0.5.0-dev] — Phase 18 — Redis Activation + Digital Twin
 
 ### Added
