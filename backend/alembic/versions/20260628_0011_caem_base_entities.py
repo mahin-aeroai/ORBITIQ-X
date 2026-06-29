@@ -23,8 +23,8 @@ import uuid
 
 
 # Set this to your current migration head
-revision = '017_01_caem_base'
-down_revision = '20260626_0010_add_fk_user_sessions'
+revision = '20260628_0011_caem_base_entities'
+down_revision = '0010_add_fk_user_sessions'
 branch_labels = None
 depends_on = None
 
