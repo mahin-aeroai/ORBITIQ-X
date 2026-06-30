@@ -184,4 +184,14 @@ export const caemApi = {
 
   getSnapshots: (aqid: string) =>
     caemFetch(`/provenance/${encodeURIComponent(aqid)}/snapshots`),
+
+  seedFlagshipEntities: () =>
+    caemFetch<{
+      inserted_count: number;
+      skipped_count:  number;
+      failed_count:   number;
+      inserted:       string[];
+      skipped:        string[];
+      failed:         { name: string; error: string }[];
+    }>(`/entities/seed-flagship`, { method: "POST" }),
 };

@@ -30,6 +30,68 @@ const CLASS_COLOR: Record<string, string> = {
   PATENT: "#fb923c", STANDARD: "#fcd34d", INCIDENT: "#ef4444",
 };
 
+function SeedFlagshipButton({ onSeeded }: { onSeeded: () => void }) {
+  const [state, setState]   = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [result, setResult] = useState<{ inserted: number; skipped: number; failed: number } | null>(null);
+  const [error, setError]   = useState<string | null>(null);
+
+  const handleSeed = async () => {
+    setState("loading");
+    setError(null);
+    try {
+      const res = await caemApi.seedFlagshipEntities();
+      setResult({
+        inserted: res.inserted_count,
+        skipped:  res.skipped_count,
+        failed:   res.failed_count,
+      });
+      setState("done");
+      onSeeded();
+    } catch (err: any) {
+      setError(err?.message ?? String(err));
+      setState("error");
+    }
+  };
+
+  if (state === "done" && result) {
+    return (
+      <div
+        style={{ color: "#34d399", background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.3)" }}
+        className="inline-block rounded px-4 py-2 font-mono text-xs"
+      >
+        ✓ Seeded {result.inserted} entities
+        {result.skipped > 0 && ` · ${result.skipped} already existed`}
+        {result.failed > 0 && ` · ${result.failed} failed`}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        onClick={handleSeed}
+        disabled={state === "loading"}
+        style={{
+          color: "#818cf8",
+          border: "1px solid rgba(99,102,241,0.4)",
+          background: "rgba(99,102,241,0.08)",
+        }}
+        className="rounded px-4 py-2 font-mono text-xs font-semibold transition-colors hover:bg-indigo-500/20 disabled:opacity-50"
+      >
+        {state === "loading" ? "Seeding…" : "◆ Seed Flagship Entities (NASA, SpaceX, ESA, ISRO…)"}
+      </button>
+      {state === "error" && error && (
+        <div
+          style={{ color: "#ef4444", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+          className="rounded p-2 font-mono text-[10px] leading-relaxed max-w-md"
+        >
+          ⚠ Seed failed: {error.slice(0, 200)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EntityCard({ entity }: { entity: EntitySummary }) {
   const color = CLASS_COLOR[entity.entity_class] ?? "#94a3b8";
   const confPct = Math.round(entity.confidence_score * 100);
@@ -102,7 +164,7 @@ export default function EntityBrowserPage() {
   const [searchQuery, setSearchQuery]     = useState("");
   const [page, setPage]                   = useState(1);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, refetch: refetchEntities } = useQuery({
     queryKey: ["entities", selectedClass, page],
     queryFn: () => caemApi.listEntities({
       entity_class: selectedClass === "All" ? undefined : selectedClass,
@@ -208,9 +270,12 @@ export default function EntityBrowserPage() {
         ) : entities.length === 0 ? (
           <div className="py-16 text-center">
             <div style={{ color: "var(--color-text-tertiary)" }} className="text-4xl mb-3">◇</div>
-            <p style={{ color: "var(--color-text-tertiary)" }} className="text-sm">
+            <p style={{ color: "var(--color-text-tertiary)" }} className="text-sm mb-4">
               {searchQuery.length >= 2 ? "No entities match your search." : "No entities found. Run ingestion to populate."}
             </p>
+            {searchQuery.length < 2 && (
+              <SeedFlagshipButton onSeeded={() => refetchEntities()} />
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
