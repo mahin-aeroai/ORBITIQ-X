@@ -4,8 +4,23 @@
 [build]
 builder = "dockerfile"
 dockerfilePath = "backend/Dockerfile.railway"
+# CRITICAL: every directory the Dockerfile COPYs into the image must be
+# listed here. Dockerfile.railway copies backend/, orbital-engine/,
+# agents/, rag/, and scripts/ — a commit touching ONLY one of the
+# non-backend/ directories will silently NOT trigger a redeploy if its
+# path isn't covered here, leaving Railway serving a stale container
+# indefinitely with zero error or warning. This caused a multi-hour
+# debugging loop on 2026-06-30: a one-line fix to
+# scripts/seed_flagship_entities.py was committed, pushed, and verified
+# correct in isolation, but never actually deployed because scripts/**
+# wasn't in this list — every subsequent "fix attempt" against
+# production was unknowingly re-testing the OLD, unfixed code.
 watchPatterns = [
   "backend/**",
+  "orbital-engine/**",
+  "agents/**",
+  "rag/**",
+  "scripts/**",
   "railway.toml"
 ]
 
