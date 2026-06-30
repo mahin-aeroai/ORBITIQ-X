@@ -13,11 +13,15 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { getApiAccessToken } from "@/lib/api";
 
 const V2 = "/api/v2/intelligence";
 
 async function apiFetch(path: string) {
-  const res = await fetch(`${V2}${path}`);
+  const token = getApiAccessToken();
+  const res = await fetch(`${V2}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }

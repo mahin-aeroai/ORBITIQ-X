@@ -6,12 +6,12 @@
  * Never hard-code the Railway URL — let vercel.json rewrites do it.
  */
 
+import { getApiAccessToken } from "@/lib/api";
+
 const V2 = "/api/v2";
 
 async function caemFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined"
-    ? localStorage.getItem("orbitiq_token") ?? ""
-    : "";
+  const token = getApiAccessToken();
 
   const res = await fetch(`${V2}${path}`, {
     headers: {

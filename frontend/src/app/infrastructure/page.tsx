@@ -6,10 +6,15 @@
 // @ts-nocheck
 import { useQuery } from "@tanstack/react-query";
 
+import { getApiAccessToken } from "@/lib/api";
+
 const V1 = "/api/v1";
 
 async function apiFetch(path: string) {
-  const res = await fetch(`${V1}${path}`);
+  const token = getApiAccessToken();
+  const res = await fetch(`${V1}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }

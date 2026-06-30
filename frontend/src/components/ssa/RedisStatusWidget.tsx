@@ -10,11 +10,19 @@
 
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getApiAccessToken } from "@/lib/api";
 
 const V1 = "/api/v1";
 
 async function apiFetch(path: string, method = "GET") {
-  const res = await fetch(`${V1}${path}`, { method });
+  const token = getApiAccessToken();
+  const res = await fetch(`${V1}${path}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
   if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }
