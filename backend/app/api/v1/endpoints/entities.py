@@ -616,7 +616,10 @@ async def seed_flagship_entities(pg=Depends(get_pg_session)):
     Idempotent — existing AQIDs are skipped, safe to call multiple times.
     """
     import sys as _sys
+    import logging as _logging
     from pathlib import Path as _Path
+
+    _logger = _logging.getLogger(__name__)
 
     # Locate scripts/ robustly across local dev and Railway container layouts
     # (this file is one directory deeper in the container — see Dockerfile.railway
@@ -628,15 +631,29 @@ async def seed_flagship_entities(pg=Depends(get_pg_session)):
         _Path("/app/scripts"),               # explicit Railway fallback
     ]
     scripts_dir = next((p for p in _scripts_candidates if p.is_dir()), _scripts_candidates[0])
+    _logger.info(
+        "seed_flagship_path_resolved this_file=%s scripts_dir=%s exists=%s candidates=%s",
+        _this_file, scripts_dir, scripts_dir.is_dir(),
+        [(str(c), c.is_dir()) for c in _scripts_candidates],
+    )
     if str(scripts_dir) not in _sys.path:
         _sys.path.insert(0, str(scripts_dir))
 
     try:
         from seed_flagship_entities import FLAGSHIP_ENTITIES, build_entity_record
-    except ImportError as e:
+    except Exception as e:
+        try:
+            _dir_listing = [p.name for p in scripts_dir.iterdir()] if scripts_dir.is_dir() else ["<directory does not exist>"]
+        except Exception:
+            _dir_listing = ["<could not list directory>"]
+        _logger.exception("seed_flagship_import_failed scripts_dir=%s", scripts_dir)
         raise HTTPException(
             status_code=500,
-            detail=f"Could not load seed_flagship_entities.py from {scripts_dir}: {e}",
+            detail=(
+                f"Could not load seed_flagship_entities.py from {scripts_dir} "
+                f"(exists={scripts_dir.is_dir()}): {type(e).__name__}: {e}. "
+                f"Directory contents: {_dir_listing}"
+            ),
         )
 
     inserted, skipped, failed = [], [], []
@@ -645,39 +662,63 @@ async def seed_flagship_entities(pg=Depends(get_pg_session)):
         try:
             record = build_entity_record(spec)
         except Exception as e:
-            failed.append({"name": spec["display_name"], "error": str(e)})
+            failed.append({"name": spec["display_name"], "error": f"{type(e).__name__}: {e}"})
             continue
 
-        existing = (await pg.execute(
-            text("SELECT aqid FROM aerospace_entities WHERE aqid = :aqid"),
-            {"aqid": record["aqid"]},
-        )).fetchone()
+        try:
+            existing = (await pg.execute(
+                text("SELECT aqid FROM aerospace_entities WHERE aqid = :aqid"),
+                {"aqid": record["aqid"]},
+            )).fetchone()
 
-        if existing:
-            skipped.append(record["aqid"])
+            if existing:
+                skipped.append(record["aqid"])
+                continue
+
+            # JSONB columns need an explicit ::jsonb cast on their placeholder —
+            # asyncpg binds Python str parameters as plain text by default, and
+            # PostgreSQL does not implicitly cast an unknown-typed text parameter
+            # to jsonb in an INSERT VALUES context (only string *literals* get
+            # that implicit cast). Without this, every insert here would fail
+            # with something like:
+            #   asyncpg.exceptions.DatatypeMismatchError: column "tags" is of
+            #   type jsonb but expression is of type character varying
+            _JSONB_COLUMNS = {"aliases", "tags", "domains", "extension_data", "primary_provenance"}
+            columns = ", ".join(record.keys())
+            placeholders = ", ".join(
+                f":{k}::jsonb" if k in _JSONB_COLUMNS else f":{k}"
+                for k in record.keys()
+            )
+            await pg.execute(
+                text(f"INSERT INTO aerospace_entities ({columns}) VALUES ({placeholders})"),
+                record,
+            )
+            inserted.append(record["aqid"])
+
+        except Exception as e:
+            # If this record's INSERT (or the existence check) fails,
+            # PostgreSQL marks the whole transaction as aborted — every
+            # subsequent statement on this session would also fail with
+            # InFailedSqlTransactionError until a ROLLBACK happens. Without
+            # this rollback, ONE bad record silently breaks every record
+            # after it in the loop, producing a confusing blanket 500 that
+            # looks like everything failed when only one record actually did.
+            await pg.rollback()
+            failed.append({
+                "name":  record.get("display_name", spec.get("display_name", "?")),
+                "aqid":  record.get("aqid"),
+                "error": f"{type(e).__name__}: {e}",
+            })
             continue
 
-        # JSONB columns need an explicit ::jsonb cast on their placeholder —
-        # asyncpg binds Python str parameters as plain text by default, and
-        # PostgreSQL does not implicitly cast an unknown-typed text parameter
-        # to jsonb in an INSERT VALUES context (only string *literals* get
-        # that implicit cast). Without this, every insert here would fail
-        # with something like:
-        #   asyncpg.exceptions.DatatypeMismatchError: column "tags" is of
-        #   type jsonb but expression is of type character varying
-        _JSONB_COLUMNS = {"aliases", "tags", "domains", "extension_data", "primary_provenance"}
-        columns = ", ".join(record.keys())
-        placeholders = ", ".join(
-            f":{k}::jsonb" if k in _JSONB_COLUMNS else f":{k}"
-            for k in record.keys()
+    try:
+        await pg.commit()
+    except Exception as e:
+        await pg.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Final commit failed after {len(inserted)} inserts: {type(e).__name__}: {e}",
         )
-        await pg.execute(
-            text(f"INSERT INTO aerospace_entities ({columns}) VALUES ({placeholders})"),
-            record,
-        )
-        inserted.append(record["aqid"])
-
-    await pg.commit()
 
     return {
         "inserted_count": len(inserted),
