@@ -32,7 +32,12 @@ const CLASS_COLOR: Record<string, string> = {
 
 function SeedFlagshipButton({ onSeeded }: { onSeeded: () => void }) {
   const [state, setState]   = useState<"idle" | "loading" | "done" | "error">("idle");
-  const [result, setResult] = useState<{ inserted: number; skipped: number; failed: number } | null>(null);
+  const [result, setResult] = useState<{
+    inserted: number;
+    skipped:  number;
+    failed:   number;
+    failedDetails: { name: string; aqid?: string; error: string }[];
+  } | null>(null);
   const [error, setError]   = useState<string | null>(null);
 
   const handleSeed = async () => {
@@ -44,6 +49,7 @@ function SeedFlagshipButton({ onSeeded }: { onSeeded: () => void }) {
         inserted: res.inserted_count,
         skipped:  res.skipped_count,
         failed:   res.failed_count,
+        failedDetails: res.failed ?? [],
       });
       setState("done");
       onSeeded();
@@ -55,13 +61,44 @@ function SeedFlagshipButton({ onSeeded }: { onSeeded: () => void }) {
 
   if (state === "done" && result) {
     return (
-      <div
-        style={{ color: "#34d399", background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.3)" }}
-        className="inline-block rounded px-4 py-2 font-mono text-xs"
-      >
-        ✓ Seeded {result.inserted} entities
-        {result.skipped > 0 && ` · ${result.skipped} already existed`}
-        {result.failed > 0 && ` · ${result.failed} failed`}
+      <div className="flex flex-col items-center gap-2">
+        <div
+          style={{
+            color: result.inserted > 0 ? "#34d399" : "#fbbf24",
+            background: result.inserted > 0 ? "rgba(52,211,153,0.08)" : "rgba(251,191,36,0.08)",
+            border: `1px solid ${result.inserted > 0 ? "rgba(52,211,153,0.3)" : "rgba(251,191,36,0.3)"}`,
+          }}
+          className="inline-block rounded px-4 py-2 font-mono text-xs"
+        >
+          {result.inserted > 0 ? "✓" : "⚠"} Seeded {result.inserted} entities
+          {result.skipped > 0 && ` · ${result.skipped} already existed`}
+          {result.failed > 0 && ` · ${result.failed} failed`}
+        </div>
+        {result.failedDetails.length > 0 && (
+          <div
+            style={{ color: "#ef4444", background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}
+            className="rounded p-3 font-mono text-[10px] leading-relaxed max-w-2xl text-left max-h-64 overflow-y-auto"
+          >
+            {result.failedDetails.map((f, i) => (
+              <div key={i} className="mb-1.5 last:mb-0">
+                <span style={{ color: "#fca5a5" }} className="font-semibold">{f.name}</span>
+                {f.aqid && <span style={{ color: "var(--color-text-tertiary)" }}> ({f.aqid})</span>}
+                {": "}
+                {f.error}
+              </div>
+            ))}
+          </div>
+        )}
+        {result.failed > 0 && (
+          <button
+            onClick={handleSeed}
+            disabled={state === "loading"}
+            style={{ color: "var(--color-text-tertiary)", border: "1px solid var(--color-space-border)" }}
+            className="rounded px-3 py-1 font-mono text-[10px] hover:border-indigo-500 hover:text-indigo-400 transition-colors"
+          >
+            ↻ Retry
+          </button>
+        )}
       </div>
     );
   }
