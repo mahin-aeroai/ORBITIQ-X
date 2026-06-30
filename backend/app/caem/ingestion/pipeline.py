@@ -583,8 +583,8 @@ class CAEMIngestionPipeline:
                 ) VALUES (
                     :aqid, :entity_class, :entity_subclass, :display_name,
                     :description, :lifecycle_status, :confidence_score,
-                    :extension_data::jsonb, :primary_provenance::jsonb,
-                    :all_sources::jsonb, :verification_status,
+                    :extension_data ::jsonb, :primary_provenance ::jsonb,
+                    :all_sources ::jsonb, :verification_status,
                     :ingest_job_id, :ingest_pipeline,
                     :created_at, :updated_at
                 )
@@ -708,7 +708,7 @@ class CAEMIngestionPipeline:
                         is_current, confidence, provenance_url, properties, synced_at
                     ) VALUES (
                         :rel_id, :source_aqid, :target_aqid, :rel_type,
-                        true, :confidence, :provenance_url, :properties::jsonb, now()
+                        true, :confidence, :provenance_url, :properties ::jsonb, now()
                     )
                     ON CONFLICT (rel_id) DO UPDATE SET
                         is_current      = true,
@@ -805,7 +805,7 @@ class CAEMIngestionPipeline:
                     :job_id, :pipeline_version, :started_at, :completed_at, :status,
                     :source_url, :source_type, :entities_created, :entities_updated,
                     :relationships_added, :chunks_indexed,
-                    :contradictions::jsonb, :errors::jsonb, :warnings::jsonb
+                    :contradictions ::jsonb, :errors ::jsonb, :warnings ::jsonb
                 )
             """, {
                 "job_id":               job.job_id,

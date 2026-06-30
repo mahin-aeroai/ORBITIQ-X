@@ -535,9 +535,9 @@ class ProvenanceService:
                     created_by, ingest_job_id, created_at
                 ) VALUES (
                     :snapshot_id, :aqid, :version, :snapshot_type,
-                    :entity_state::jsonb, :extension_state::jsonb,
+                    :entity_state ::jsonb, :extension_state ::jsonb,
                     :confidence, :verification,
-                    :change_summary, :fields_changed::jsonb, :field_diffs::jsonb,
+                    :change_summary, :fields_changed ::jsonb, :field_diffs ::jsonb,
                     :created_by, :ingest_job_id, :created_at
                 )
             """, {

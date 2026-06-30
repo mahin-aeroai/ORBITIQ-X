@@ -306,7 +306,7 @@ class IngestionOrchestrator:
                     :job_id, :adapter_name, :started_at, :completed_at,
                     :records_fetched, :entities_created, :entities_updated,
                     :relationships_added, :contradictions,
-                    :fetch_errors::jsonb, :pipeline_errors::jsonb, :status
+                    :fetch_errors ::jsonb, :pipeline_errors ::jsonb, :status
                 )
             """, {
                 "job_id":              result["job_id"],

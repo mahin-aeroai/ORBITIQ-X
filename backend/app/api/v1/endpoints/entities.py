@@ -173,11 +173,11 @@ async def list_entities(
         params["entity_class"] = entity_class.upper()
 
     if domain:
-        where_clauses.append("domains @> :domain::jsonb")
+        where_clauses.append("domains @> :domain ::jsonb")
         params["domain"] = json.dumps([domain])
 
     if region:
-        where_clauses.append("regions @> :region::jsonb")
+        where_clauses.append("regions @> :region ::jsonb")
         params["region"] = json.dumps([region])
 
     where_sql = " AND ".join(where_clauses)
@@ -262,9 +262,9 @@ async def create_entity(
             created_at, updated_at
         ) VALUES (
             :aqid, :entity_class, :display_name, :short_name, :description,
-            :tags::jsonb, :domains::jsonb, :extension_data::jsonb,
+            :tags ::jsonb, :domains ::jsonb, :extension_data ::jsonb,
             'draft', 0.50,
-            :primary_provenance::jsonb, 'unverified',
+            :primary_provenance ::jsonb, 'unverified',
             'api', 'api', :now, :now
         )
     """), {
@@ -357,11 +357,11 @@ async def update_entity(
         params["long_description"] = request.long_description
 
     if request.tags is not None:
-        set_clauses.append("tags = :tags::jsonb")
+        set_clauses.append("tags = :tags ::jsonb")
         params["tags"] = json.dumps(request.tags)
 
     if request.domains is not None:
-        set_clauses.append("domains = :domains::jsonb")
+        set_clauses.append("domains = :domains ::jsonb")
         params["domains"] = json.dumps(request.domains)
 
     if request.lifecycle_status is not None:
@@ -369,7 +369,7 @@ async def update_entity(
         params["lifecycle_status"] = request.lifecycle_status.value
 
     if request.extension_data is not None:
-        set_clauses.append("extension_data = extension_data || :extension_data::jsonb")
+        set_clauses.append("extension_data = extension_data || :extension_data ::jsonb")
         params["extension_data"] = json.dumps(request.extension_data)
 
     if len(set_clauses) == 2:
@@ -518,7 +518,7 @@ async def add_source(
 
     await pg.execute(text("""
         UPDATE aerospace_entities
-        SET all_sources         = all_sources || :source::jsonb,
+        SET all_sources         = all_sources || :source ::jsonb,
             ai_requires_refresh = true,
             updated_at          = now()
         WHERE aqid = :aqid
@@ -683,10 +683,20 @@ async def seed_flagship_entities(pg=Depends(get_pg_session)):
             # with something like:
             #   asyncpg.exceptions.DatatypeMismatchError: column "tags" is of
             #   type jsonb but expression is of type character varying
+            #
+            # CRITICAL: the space before ::jsonb is required. SQLAlchemy's
+            # text() bind-parameter parser stops scanning a parameter name
+            # one character early when ':name' is immediately followed by
+            # '::' (PostgreSQL's cast operator) — it captures 'tag' instead
+            # of 'tags' for example. Without the space, SQLAlchemy fails to
+            # recognize ':tags::jsonb' as a bound parameter at all and
+            # passes the literal text through uncompiled, which asyncpg
+            # then rejects with "syntax error at or near ':'" since it has
+            # no idea what to do with a raw colon-prefixed token.
             _JSONB_COLUMNS = {"aliases", "tags", "domains", "extension_data", "primary_provenance"}
             columns = ", ".join(record.keys())
             placeholders = ", ".join(
-                f":{k}::jsonb" if k in _JSONB_COLUMNS else f":{k}"
+                f":{k} ::jsonb" if k in _JSONB_COLUMNS else f":{k}"
                 for k in record.keys()
             )
             await pg.execute(
