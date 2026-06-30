@@ -56,16 +56,40 @@ from app.digital_twin.models.twin_models import (
 
 logger = logging.getLogger(__name__)
 
-# Add orbital-engine to path
-_OE_ROOT = pathlib.Path(__file__).parents[4] / "orbital-engine"
+# Add orbital-engine to path.
+#
+# Local dev layout:   <repo>/backend/app/digital_twin/services/this_file.py
+#                     parents[4] = <repo>           → <repo>/orbital-engine ✓
+#
+# Railway Docker layout (Dockerfile.railway):
+#   WORKDIR /app
+#   COPY backend/ .                    → backend/app/... becomes /app/app/...
+#   COPY orbital-engine/ /app/orbital-engine/
+#   So this file lives at /app/app/digital_twin/services/this_file.py
+#     parents[4] = /                   → WRONG: computes /orbital-engine (doesn't exist)
+#   The correct path in the container is /app/orbital-engine.
+#
+# Rather than hard-code a parents[N] index that breaks when copied into a
+# different directory depth, walk upward from this file looking for a
+# directory that actually contains "orbital-engine", trying both the
+# local dev depth and the container depth explicitly as a fallback.
+_THIS_FILE = pathlib.Path(__file__).resolve()
+_OE_CANDIDATES = [
+    _THIS_FILE.parents[4] / "orbital-engine",   # local dev: <repo>/orbital-engine
+    _THIS_FILE.parents[3] / "orbital-engine",   # Railway:   /app/orbital-engine
+    pathlib.Path("/app/orbital-engine"),        # explicit Railway fallback
+]
+_OE_ROOT = next((p for p in _OE_CANDIDATES if p.is_dir()), _OE_CANDIDATES[0])
 if str(_OE_ROOT) not in sys.path:
     sys.path.insert(0, str(_OE_ROOT))
+logger.info("orbital_engine_path_resolved path=%s exists=%s", _OE_ROOT, _OE_ROOT.is_dir())
 
 # ── In-memory live state cache ────────────────────────────────
 # Primary live store. Redis mirrors this for multi-process access.
 _LIVE_STATES: dict[int, SatelliteState] = {}
 _LAST_PROPAGATION: datetime | None = None
 _PROPAGATION_DURATION_S: float = 0.0
+_LAST_PROPAGATION_ERROR: str | None = None
 
 REDIS_KEY_PREFIX  = "twin:state:"
 REDIS_TTL_SECONDS = 900   # 15 minutes
@@ -81,6 +105,7 @@ def get_propagation_meta() -> dict:
         "last_propagation":    _LAST_PROPAGATION.isoformat() if _LAST_PROPAGATION else None,
         "objects_propagated":  len(_LIVE_STATES),
         "propagation_seconds": round(_PROPAGATION_DURATION_S, 1),
+        "last_error":          _LAST_PROPAGATION_ERROR,
     }
 
 
@@ -126,7 +151,7 @@ class OrbitalStateService:
         dict
             Summary: objects_propagated, ok, failed, duration_s.
         """
-        global _LIVE_STATES, _LAST_PROPAGATION, _PROPAGATION_DURATION_S
+        global _LIVE_STATES, _LAST_PROPAGATION, _PROPAGATION_DURATION_S, _LAST_PROPAGATION_ERROR
 
         epoch  = epoch or datetime.now(timezone.utc)
         t0     = time.perf_counter()
@@ -134,29 +159,43 @@ class OrbitalStateService:
         ok     = 0
         failed = 0
 
-        # Load catalog from PostgreSQL
-        satellites = await self._load_catalog(max_objects, regime_filter)
-        logger.info("digital_twin_propagating epoch=%s objects=%d", epoch.isoformat(), len(satellites))
+        try:
+            # Load catalog from PostgreSQL
+            satellites = await self._load_catalog(max_objects, regime_filter)
+            logger.info("digital_twin_propagating epoch=%s objects=%d", epoch.isoformat(), len(satellites))
 
-        # Propagate in async executor (CPU-bound)
-        results = await asyncio.get_event_loop().run_in_executor(
-            None, self._propagate_batch_sync, satellites, epoch
-        )
+            # Propagate in async executor (CPU-bound)
+            results = await asyncio.get_event_loop().run_in_executor(
+                None, self._propagate_batch_sync, satellites, epoch
+            )
 
-        for state in results:
-            if state.propagation_ok:
-                states[state.norad_id] = state
-                ok += 1
-            else:
-                failed += 1
+            for state in results:
+                if state.propagation_ok:
+                    states[state.norad_id] = state
+                    ok += 1
+                else:
+                    failed += 1
 
-        # Update live cache
-        _LIVE_STATES            = states
-        _LAST_PROPAGATION       = epoch
-        _PROPAGATION_DURATION_S = time.perf_counter() - t0
+            # Update live cache
+            _LIVE_STATES            = states
+            _LAST_PROPAGATION       = epoch
+            _PROPAGATION_DURATION_S = time.perf_counter() - t0
+            _LAST_PROPAGATION_ERROR = None
 
-        # Mirror to Redis
-        await self._cache_to_redis(states)
+            # Mirror to Redis
+            await self._cache_to_redis(states)
+
+        except Exception as exc:
+            _LAST_PROPAGATION_ERROR = f"{type(exc).__name__}: {exc}"
+            logger.exception("digital_twin_propagation_failed")
+            return {
+                "epoch":              epoch.isoformat(),
+                "objects_propagated": 0,
+                "failed":             0,
+                "duration_s":         round(time.perf_counter() - t0, 2),
+                "regime_counts":      {},
+                "error":              _LAST_PROPAGATION_ERROR,
+            }
 
         summary = {
             "epoch":              epoch.isoformat(),

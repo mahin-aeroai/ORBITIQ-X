@@ -193,6 +193,14 @@ export function RedisStatusWidget() {
           {dtStatus?.last_propagation && (
             <StatRow label="Last propagation" value={new Date(dtStatus.last_propagation).toLocaleTimeString()} />
           )}
+          {dtStatus?.last_error && (
+            <div
+              style={{ color: "#ef4444", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+              className="rounded p-2 font-mono text-[9px] leading-relaxed"
+            >
+              ⚠ Last propagation failed: {dtStatus.last_error.slice(0, 120)}
+            </div>
+          )}
           <StatRow label="SSE alerts" value={redisConnected ? "active" : "polling fallback"}
             color={redisConnected ? "#34d399" : "#fbbf24"} />
         </div>

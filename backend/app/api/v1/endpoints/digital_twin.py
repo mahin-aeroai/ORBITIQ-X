@@ -381,6 +381,7 @@ async def get_twin_status() -> ORJSONResponse:
         "last_propagation":   meta["last_propagation"],
         "objects_propagated": meta["objects_propagated"],
         "propagation_seconds":meta["propagation_seconds"],
+        "last_error":         meta.get("last_error"),
         "regime_distribution":regime_counts,
         "cached_forecasts":   len(_FORECAST_CACHE),
         "components": {
