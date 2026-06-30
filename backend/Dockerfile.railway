@@ -23,6 +23,9 @@ COPY agents/ /app/agents/
 # Copy RAG pipeline (used by GraphRAG bridge)
 COPY rag/ /app/rag/
 
+# Copy scripts (used by entity seed endpoints, corpus loaders, etc.)
+COPY scripts/ /app/scripts/
+
 WORKDIR /app
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

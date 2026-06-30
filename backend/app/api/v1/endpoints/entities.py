@@ -602,3 +602,76 @@ async def fulltext_search(
             for row in results
         ]
     }
+
+
+@router.post("/seed-flagship", status_code=status.HTTP_201_CREATED)
+async def seed_flagship_entities(pg=Depends(get_pg_session)):
+    """
+    Insert a small curated set of flagship aerospace entities (NASA, ESA,
+    ISRO, SpaceX, Blue Origin, Rocket Lab, ULA, Falcon 9/Heavy, Starship,
+    SLS, Ariane 6, Artemis II, JWST, ISS, plus USA/India/France) directly
+    into aerospace_entities, for an immediate populated Entity Browser
+    ahead of running the full ingestion pipeline.
+
+    Idempotent — existing AQIDs are skipped, safe to call multiple times.
+    """
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    # Locate scripts/ robustly across local dev and Railway container layouts
+    # (this file is one directory deeper in the container — see Dockerfile.railway
+    # COPY backend/ . which shifts everything under /app/app/...).
+    _this_file = _Path(__file__).resolve()
+    _scripts_candidates = [
+        _this_file.parents[5] / "scripts",   # local dev: backend/app/api/v1/endpoints -> repo_root/scripts
+        _this_file.parents[4] / "scripts",   # Railway:   /app/app/api/v1/endpoints -> /app/scripts
+        _Path("/app/scripts"),               # explicit Railway fallback
+    ]
+    scripts_dir = next((p for p in _scripts_candidates if p.is_dir()), _scripts_candidates[0])
+    if str(scripts_dir) not in _sys.path:
+        _sys.path.insert(0, str(scripts_dir))
+
+    try:
+        from seed_flagship_entities import FLAGSHIP_ENTITIES, build_entity_record
+    except ImportError as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not load seed_flagship_entities.py from {scripts_dir}: {e}",
+        )
+
+    inserted, skipped, failed = [], [], []
+
+    for spec in FLAGSHIP_ENTITIES:
+        try:
+            record = build_entity_record(spec)
+        except Exception as e:
+            failed.append({"name": spec["display_name"], "error": str(e)})
+            continue
+
+        existing = (await pg.execute(
+            text("SELECT aqid FROM aerospace_entities WHERE aqid = :aqid"),
+            {"aqid": record["aqid"]},
+        )).fetchone()
+
+        if existing:
+            skipped.append(record["aqid"])
+            continue
+
+        columns = ", ".join(record.keys())
+        placeholders = ", ".join(f":{k}" for k in record.keys())
+        await pg.execute(
+            text(f"INSERT INTO aerospace_entities ({columns}) VALUES ({placeholders})"),
+            record,
+        )
+        inserted.append(record["aqid"])
+
+    await pg.commit()
+
+    return {
+        "inserted_count": len(inserted),
+        "skipped_count":  len(skipped),
+        "failed_count":   len(failed),
+        "inserted":       inserted,
+        "skipped":        skipped,
+        "failed":         failed,
+    }
