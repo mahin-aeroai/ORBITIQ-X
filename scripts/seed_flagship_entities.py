@@ -342,7 +342,15 @@ def build_entity_record(spec: dict) -> dict:
 
     extension_data = validate_extension(entity_class, spec.get("extension_data", {}))
 
-    now = datetime.now(timezone.utc)
+    # aerospace_entities.created_at/updated_at/published_at are
+    # sa.DateTime WITHOUT timezone (TIMESTAMP WITHOUT TIME ZONE in
+    # PostgreSQL) — must use a naive datetime here, matching the
+    # convention used everywhere else in this codebase (entities.py's
+    # create_entity uses datetime.utcnow() for the same reason). A
+    # timezone-aware datetime.now(timezone.utc) causes asyncpg to reject
+    # the value outright: "can't subtract offset-naive and offset-aware
+    # datetimes".
+    now = datetime.utcnow()
     return {
         "aqid": aqid,
         "entity_class": entity_class.value,
