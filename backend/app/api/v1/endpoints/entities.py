@@ -12,18 +12,9 @@ Endpoints:
   PATCH  /api/v2/entities/{aqid}              — Update entity fields
   GET    /api/v2/entities/{aqid}/relationships — Get all relationships
   GET    /api/v2/entities/{aqid}/neighborhood  — Get Neo4j neighborhood
-  GET    /api/v2/entities/{aqid}/timeline      — Get timeline events
-  GET    /api/v2/entities/{aqid}/documents     — Get linked documents
   POST   /api/v2/entities/{aqid}/sources       — Add provenance source
   POST   /api/v2/entities/{aqid}/refresh-summary — Trigger AI summary refresh
   GET    /api/v2/entities/search/fulltext       — Full-text search
-
-Design notes:
-  - All endpoints require JWT auth (reusing existing ORBITIQ-X auth middleware)
-  - Write operations require 'knowledge_editor' role
-  - Read operations require 'viewer' role
-  - Pagination uses cursor-based approach (updated_at + aqid)
-  - Response envelopes include confidence scores and provenance for every entity
 """
 
 from __future__ import annotations
@@ -35,14 +26,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from caem.base import (
-    BaseAerospaceEntity,
     EntityClass,
     LifecycleStatus,
-    ProvenanceRecord,
     SourceType,
-    VerificationStatus,
     generate_aqid,
     validate_aqid,
 )
@@ -72,27 +61,26 @@ class EntityCreateRequest(BaseModel):
 
 
 class EntityUpdateRequest(BaseModel):
-    display_name:       Optional[str]           = None
-    short_name:         Optional[str]           = None
-    description:        Optional[str]           = None
-    long_description:   Optional[str]           = None
-    tags:               Optional[List[str]]     = None
-    domains:            Optional[List[str]]     = None
-    extension_data:     Optional[Dict[str, Any]] = None
-    lifecycle_status:   Optional[LifecycleStatus] = None
+    display_name:       Optional[str]            = None
+    short_name:          Optional[str]            = None
+    description:         Optional[str]            = None
+    long_description:    Optional[str]            = None
+    tags:                Optional[List[str]]      = None
+    domains:             Optional[List[str]]      = None
+    extension_data:      Optional[Dict[str, Any]] = None
+    lifecycle_status:    Optional[LifecycleStatus] = None
 
 
 class EntitySummaryResponse(BaseModel):
-    """Lightweight response for list endpoints."""
-    aqid:               str
-    entity_class:       str
-    display_name:       str
-    short_name:         Optional[str]
-    description:        Optional[str]
-    lifecycle_status:   str
-    confidence_score:   float
-    tags:               List[str]
-    updated_at:         datetime
+    aqid:                 str
+    entity_class:         str
+    display_name:         str
+    short_name:           Optional[str]
+    description:          Optional[str]
+    lifecycle_status:     str
+    confidence_score:     float
+    tags:                 List[str]
+    updated_at:           datetime
     ai_executive_summary: Optional[str]
 
 
@@ -129,8 +117,7 @@ class SourceAddRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# DEPENDENCY INJECTION STUBS
-# Replace with actual ORBITIQ-X dependency injection
+# DEPENDENCIES
 # ---------------------------------------------------------------------------
 
 async def get_pg_session():
@@ -139,6 +126,7 @@ async def get_pg_session():
     async for session in get_session():
         yield session
 
+
 def get_neo4j_driver():
     """Return Neo4j driver (initialized at startup)."""
     from app.graph.connection import get_driver
@@ -146,12 +134,6 @@ def get_neo4j_driver():
         return get_driver()
     except Exception:
         return None
-
-def require_viewer():
-    pass  # Auth applied at router level via dependencies=[]
-
-def require_editor():
-    pass  # Auth applied at router level via dependencies=[]
 
 
 # ---------------------------------------------------------------------------
@@ -167,6 +149,7 @@ async def list_entities(
     min_confidence:     float           = Query(0.0, description="Minimum confidence score"),
     page:               int             = Query(1, ge=1),
     page_size:          int             = Query(20, ge=1, le=100),
+    pg=Depends(get_pg_session),
 ):
     """
     List and filter aerospace entities.
@@ -199,22 +182,26 @@ async def list_entities(
 
     where_sql = " AND ".join(where_clauses)
 
-    count_result = pg.execute(
-        f"SELECT COUNT(*) FROM aerospace_entities WHERE {where_sql}",
-        params
-    ).scalar()
+    try:
+        count_result = (await pg.execute(
+            text(f"SELECT COUNT(*) FROM aerospace_entities WHERE {where_sql}"),
+            params
+        )).scalar()
 
-    results = pg.execute(
-        f"""
-        SELECT aqid, entity_class, display_name, short_name, description,
-               lifecycle_status, confidence_score, tags, updated_at, ai_executive_summary
-        FROM aerospace_entities
-        WHERE {where_sql}
-        ORDER BY updated_at DESC, aqid
-        LIMIT :limit OFFSET :offset
-        """,
-        params
-    ).fetchall()
+        results = (await pg.execute(
+            text(f"""
+                SELECT aqid, entity_class, display_name, short_name, description,
+                       lifecycle_status, confidence_score, tags, updated_at, ai_executive_summary
+                FROM aerospace_entities
+                WHERE {where_sql}
+                ORDER BY updated_at DESC, aqid
+                LIMIT :limit OFFSET :offset
+            """),
+            params
+        )).fetchall()
+    except Exception as e:
+        logger.error(f"list_entities query failed: {e}")
+        return EntityListResponse(entities=[], total=0, page=page, page_size=page_size, next_cursor=None)
 
     entities = [
         EntitySummaryResponse(
@@ -237,7 +224,9 @@ async def list_entities(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_entity(
-    request:    EntityCreateRequest,
+    request: EntityCreateRequest,
+    pg=Depends(get_pg_session),
+    neo4j=Depends(get_neo4j_driver),
 ):
     """
     Create a new aerospace entity.
@@ -245,11 +234,10 @@ async def create_entity(
     """
     aqid = request.to_aqid()
 
-    # Check duplicate
-    existing = pg.execute(
-        "SELECT aqid FROM aerospace_entities WHERE aqid = :aqid",
+    existing = (await pg.execute(
+        text("SELECT aqid FROM aerospace_entities WHERE aqid = :aqid"),
         {"aqid": aqid}
-    ).fetchone()
+    )).fetchone()
 
     if existing:
         raise HTTPException(
@@ -257,7 +245,6 @@ async def create_entity(
             detail=f"Entity already exists with AQID: {aqid}. Use PATCH to update."
         )
 
-    # Validate extension
     try:
         validated_ext = validate_extension(request.entity_class, request.extension_data)
     except Exception as e:
@@ -267,7 +254,7 @@ async def create_entity(
         )
 
     now = datetime.utcnow()
-    pg.execute("""
+    await pg.execute(text("""
         INSERT INTO aerospace_entities (
             aqid, entity_class, display_name, short_name, description,
             tags, domains, extension_data, lifecycle_status, confidence_score,
@@ -275,12 +262,12 @@ async def create_entity(
             created_at, updated_at
         ) VALUES (
             :aqid, :entity_class, :display_name, :short_name, :description,
-            :tags::jsonb, :domains::jsonb, :extension_data::jsonb,
+            :tags, :domains, :extension_data,
             'draft', 0.50,
-            :primary_provenance::jsonb, 'unverified',
+            :primary_provenance, 'unverified',
             'api', 'api', :now, :now
         )
-    """, {
+    """), {
         "aqid":             aqid,
         "entity_class":     request.entity_class.value,
         "display_name":     request.display_name,
@@ -296,41 +283,40 @@ async def create_entity(
         }),
         "now": now,
     })
+    await pg.commit()
 
-    # Neo4j node
-    from caem.graph.neo4j_schema import NODE_UPSERT_CYPHER_NO_APOC
-    with neo4j.session() as session:
-        session.run(NODE_UPSERT_CYPHER_NO_APOC, **{
-            "aqid":             aqid,
-            "display_name":     request.display_name,
-            "short_name":       request.short_name,
-            "entity_class":     request.entity_class.value,
-            "entity_subclass":  None,
-            "is_active":        True,
-            "lifecycle_status": "draft",
-            "confidence_score": 0.50,
-            "tags":             request.tags,
-        })
+    if neo4j:
+        try:
+            from caem.graph.neo4j_schema import NODE_UPSERT_CYPHER_NO_APOC
+            with neo4j.session() as session:
+                session.run(NODE_UPSERT_CYPHER_NO_APOC, **{
+                    "aqid":             aqid,
+                    "display_name":     request.display_name,
+                    "short_name":       request.short_name,
+                    "entity_class":     request.entity_class.value,
+                    "entity_subclass":  None,
+                    "is_active":        True,
+                    "lifecycle_status": "draft",
+                    "confidence_score": 0.50,
+                    "tags":             request.tags,
+                })
+        except Exception as e:
+            logger.warning(f"Neo4j node creation failed for {aqid}: {e}")
 
     logger.info(f"Entity created: {aqid}")
     return {"aqid": aqid, "status": "created"}
 
 
 @router.get("/{aqid}")
-async def get_entity(
-    aqid:   str,
-):
-    """
-    Retrieve the full entity record by AQID.
-    Returns all fields including extension_data, AI summary, and provenance.
-    """
+async def get_entity(aqid: str, pg=Depends(get_pg_session)):
+    """Retrieve the full entity record by AQID."""
     if not validate_aqid(aqid):
         raise HTTPException(status_code=400, detail=f"Invalid AQID format: {aqid}")
 
-    result = pg.execute(
-        "SELECT * FROM aerospace_entities WHERE aqid = :aqid AND is_active = true",
+    result = (await pg.execute(
+        text("SELECT * FROM aerospace_entities WHERE aqid = :aqid AND is_active = true"),
         {"aqid": aqid}
-    ).fetchone()
+    )).fetchone()
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Entity not found: {aqid}")
@@ -340,21 +326,18 @@ async def get_entity(
 
 @router.patch("/{aqid}")
 async def update_entity(
-    aqid:       str,
-    request:    EntityUpdateRequest,
+    aqid: str,
+    request: EntityUpdateRequest,
+    pg=Depends(get_pg_session),
 ):
-    """
-    Partially update an entity's fields.
-    Only provided fields are updated. Extension data is merged (not replaced).
-    Triggers AI summary refresh.
-    """
+    """Partially update an entity's fields. Extension data is merged, not replaced."""
     if not validate_aqid(aqid):
         raise HTTPException(status_code=400, detail=f"Invalid AQID format: {aqid}")
 
-    existing = pg.execute(
-        "SELECT aqid, entity_class, extension_data FROM aerospace_entities WHERE aqid = :aqid",
+    existing = (await pg.execute(
+        text("SELECT aqid, entity_class, extension_data FROM aerospace_entities WHERE aqid = :aqid"),
         {"aqid": aqid}
-    ).fetchone()
+    )).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail=f"Entity not found: {aqid}")
 
@@ -374,11 +357,11 @@ async def update_entity(
         params["long_description"] = request.long_description
 
     if request.tags is not None:
-        set_clauses.append("tags = :tags::jsonb")
+        set_clauses.append("tags = :tags")
         params["tags"] = json.dumps(request.tags)
 
     if request.domains is not None:
-        set_clauses.append("domains = :domains::jsonb")
+        set_clauses.append("domains = :domains")
         params["domains"] = json.dumps(request.domains)
 
     if request.lifecycle_status is not None:
@@ -386,17 +369,17 @@ async def update_entity(
         params["lifecycle_status"] = request.lifecycle_status.value
 
     if request.extension_data is not None:
-        # Merge incoming extension data with existing
-        set_clauses.append("extension_data = extension_data || :extension_data::jsonb")
+        set_clauses.append("extension_data = extension_data || :extension_data")
         params["extension_data"] = json.dumps(request.extension_data)
 
-    if len(set_clauses) == 2:  # Only the defaults — nothing to update
+    if len(set_clauses) == 2:
         return {"aqid": aqid, "status": "no_changes"}
 
-    pg.execute(
-        f"UPDATE aerospace_entities SET {', '.join(set_clauses)} WHERE aqid = :aqid",
+    await pg.execute(
+        text(f"UPDATE aerospace_entities SET {', '.join(set_clauses)} WHERE aqid = :aqid"),
         params
     )
+    await pg.commit()
 
     return {"aqid": aqid, "status": "updated"}
 
@@ -404,14 +387,12 @@ async def update_entity(
 @router.get("/{aqid}/relationships", response_model=List[RelationshipResponse])
 async def get_relationships(
     aqid:       str,
-    category:   Optional[str]  = Query(None, description="Filter by relationship category"),
-    direction:  str             = Query("both", description="outbound / inbound / both"),
-    is_current: bool            = Query(True),
+    category:   Optional[str] = Query(None, description="Filter by relationship category"),
+    direction:  str           = Query("both", description="outbound / inbound / both"),
+    is_current: bool          = Query(True),
+    pg=Depends(get_pg_session),
 ):
-    """
-    Get all relationships for an entity from the denormalized cache.
-    For graph traversal queries, use the /neighborhood endpoint.
-    """
+    """Get all relationships for an entity from the denormalized cache."""
     if not validate_aqid(aqid):
         raise HTTPException(status_code=400, detail=f"Invalid AQID format: {aqid}")
 
@@ -429,18 +410,22 @@ async def get_relationships(
         where_parts.append("category = :category")
         params["category"] = category
 
-    results = pg.execute(
-        f"""
-        SELECT rel_id, source_aqid, target_aqid, relationship_type,
-               category, since::text, until::text, is_current, confidence,
-               provenance_url, properties
-        FROM entity_relationships_cache
-        WHERE {' AND '.join(where_parts)}
-        ORDER BY relationship_type, source_aqid
-        LIMIT 500
-        """,
-        params
-    ).fetchall()
+    try:
+        results = (await pg.execute(
+            text(f"""
+                SELECT rel_id, source_aqid, target_aqid, relationship_type,
+                       category, since::text, until::text, is_current, confidence,
+                       provenance_url, properties
+                FROM entity_relationships_cache
+                WHERE {' AND '.join(where_parts)}
+                ORDER BY relationship_type, source_aqid
+                LIMIT 500
+            """),
+            params
+        )).fetchall()
+    except Exception as e:
+        logger.warning(f"get_relationships query failed for {aqid}: {e}")
+        return []
 
     return [
         RelationshipResponse(
@@ -456,121 +441,115 @@ async def get_relationships(
 
 @router.get("/{aqid}/neighborhood")
 async def get_neighborhood(
-    aqid:   str,
-    depth:  int             = Query(2, ge=1, le=4, description="Graph traversal depth"),
-    limit:  int             = Query(50, ge=1, le=200),
+    aqid:  str,
+    depth: int = Query(2, ge=1, le=4, description="Graph traversal depth"),
+    limit: int = Query(50, ge=1, le=200),
+    neo4j=Depends(get_neo4j_driver),
 ):
-    """
-    Return the Neo4j neighborhood for a given entity.
-    Used to power the Knowledge Graph Viewer panel on entity pages.
-    """
+    """Return the Neo4j neighborhood for a given entity."""
     if not validate_aqid(aqid):
         raise HTTPException(status_code=400, detail=f"Invalid AQID format: {aqid}")
 
-    cypher = """
-    MATCH path = (e:AerospaceEntity {aqid: $aqid})-[*1..$depth]-(neighbor:AerospaceEntity)
+    if not neo4j:
+        return {"center_aqid": aqid, "depth": depth, "nodes": [], "edges": []}
+
+    cypher = f"""
+    MATCH path = (e:AerospaceEntity {{aqid: $aqid}})-[*1..{depth}]-(neighbor:AerospaceEntity)
     WHERE neighbor.is_active = true
     WITH nodes(path) AS ns, relationships(path) AS rs
     UNWIND ns AS n
-    WITH collect(DISTINCT {
+    WITH collect(DISTINCT {{
         aqid:           n.aqid,
         display_name:   n.display_name,
         entity_class:   n.entity_class,
         confidence:     n.confidence_score
-    }) AS nodes_data,
+    }}) AS nodes_data,
     rs
     UNWIND rs AS r
     RETURN nodes_data,
-           collect(DISTINCT {
+           collect(DISTINCT {{
                rel_id:    r.rel_id,
                source:    startNode(r).aqid,
                target:    endNode(r).aqid,
                type:      type(r),
                since:     r.since,
                confidence: r.confidence
-           }) AS edges_data
+           }}) AS edges_data
     LIMIT $limit
     """
 
     try:
         with neo4j.session() as session:
-            result = session.run(cypher, aqid=aqid, depth=depth, limit=limit)
+            result = session.run(cypher, aqid=aqid, limit=limit)
             record = result.single()
             if not record:
-                return {"nodes": [], "edges": []}
+                return {"center_aqid": aqid, "depth": depth, "nodes": [], "edges": []}
             return {
-                "center_aqid":  aqid,
-                "depth":        depth,
-                "nodes":        record["nodes_data"],
-                "edges":        record["edges_data"],
+                "center_aqid": aqid,
+                "depth":       depth,
+                "nodes":       record["nodes_data"],
+                "edges":       record["edges_data"],
             }
     except Exception as e:
         logger.error(f"Neighborhood query failed for {aqid}: {e}")
-        raise HTTPException(status_code=500, detail="Graph query failed")
+        return {"center_aqid": aqid, "depth": depth, "nodes": [], "edges": []}
 
 
 @router.post("/{aqid}/sources", status_code=status.HTTP_201_CREATED)
 async def add_source(
-    aqid:       str,
-    request:    SourceAddRequest,
+    aqid: str,
+    request: SourceAddRequest,
+    pg=Depends(get_pg_session),
 ):
-    """
-    Add a provenance source to an entity's all_sources array.
-    Recomputes confidence score after addition.
-    """
+    """Add a provenance source to an entity's all_sources array."""
     if not validate_aqid(aqid):
         raise HTTPException(status_code=400, detail=f"Invalid AQID format: {aqid}")
 
     new_source = {
-        "source_url":   request.source_url,
-        "source_name":  request.source_name,
-        "source_type":  request.source_type.value,
-        "publisher":    request.publisher,
-        "author":       request.author,
-        "confidence":   request.confidence,
+        "source_url":     request.source_url,
+        "source_name":    request.source_name,
+        "source_type":    request.source_type.value,
+        "publisher":      request.publisher,
+        "author":         request.author,
+        "confidence":     request.confidence,
         "retrieved_date": datetime.utcnow().isoformat(),
-        "notes":        request.notes,
+        "notes":          request.notes,
     }
 
-    pg.execute("""
+    await pg.execute(text("""
         UPDATE aerospace_entities
-        SET all_sources         = all_sources || :source::jsonb,
+        SET all_sources         = all_sources || :source,
             ai_requires_refresh = true,
             updated_at          = now()
         WHERE aqid = :aqid
-    """, {"aqid": aqid, "source": json.dumps([new_source])})
+    """), {"aqid": aqid, "source": json.dumps([new_source])})
+    await pg.commit()
 
     return {"aqid": aqid, "status": "source_added"}
 
 
 @router.post("/{aqid}/refresh-summary", status_code=status.HTTP_202_ACCEPTED)
-async def refresh_ai_summary(
-    aqid:   str,
-):
-    """
-    Flag an entity for immediate AI summary regeneration.
-    The Summary Agent processes the queue asynchronously.
-    """
+async def refresh_ai_summary(aqid: str, pg=Depends(get_pg_session)):
+    """Flag an entity for AI summary regeneration."""
     if not validate_aqid(aqid):
         raise HTTPException(status_code=400, detail=f"Invalid AQID format: {aqid}")
 
-    pg.execute(
-        "UPDATE aerospace_entities SET ai_requires_refresh = true WHERE aqid = :aqid",
+    await pg.execute(
+        text("UPDATE aerospace_entities SET ai_requires_refresh = true WHERE aqid = :aqid"),
         {"aqid": aqid}
     )
+    await pg.commit()
     return {"aqid": aqid, "status": "refresh_queued"}
 
 
 @router.get("/search/fulltext")
 async def fulltext_search(
-    q:              str             = Query(..., min_length=2, description="Search query"),
-    entity_class:   Optional[str]   = Query(None),
-    limit:          int             = Query(20, ge=1, le=100),
+    q:            str           = Query(..., min_length=2, description="Search query"),
+    entity_class: Optional[str] = Query(None),
+    limit:        int           = Query(20, ge=1, le=100),
+    pg=Depends(get_pg_session),
 ):
-    """
-    Full-text search across entity names, descriptions, and AI summaries.
-    Uses PostgreSQL GIN tsvector index.
-    """
+    """Full-text search across entity names, descriptions, and AI summaries."""
     params: Dict[str, Any] = {"query": q, "limit": limit}
     class_filter = ""
 
@@ -578,35 +557,39 @@ async def fulltext_search(
         class_filter = "AND entity_class = :entity_class"
         params["entity_class"] = entity_class.upper()
 
-    results = pg.execute(
-        f"""
-        SELECT aqid, entity_class, display_name, description,
-               lifecycle_status, confidence_score,
-               ts_rank(
-                   to_tsvector('english',
-                       coalesce(display_name, '') || ' ' ||
-                       coalesce(description, '')
-                   ),
-                   plainto_tsquery('english', :query)
-               ) AS rank
-        FROM aerospace_entities
-        WHERE to_tsvector('english',
-                  coalesce(display_name, '') || ' ' ||
-                  coalesce(description, '')
-              ) @@ plainto_tsquery('english', :query)
-          AND is_active = true
-          AND lifecycle_status = 'published'
-          {class_filter}
-        ORDER BY rank DESC, confidence_score DESC
-        LIMIT :limit
-        """,
-        params
-    ).fetchall()
+    try:
+        results = (await pg.execute(
+            text(f"""
+                SELECT aqid, entity_class, display_name, description,
+                       lifecycle_status, confidence_score,
+                       ts_rank(
+                           to_tsvector('english',
+                               coalesce(display_name, '') || ' ' ||
+                               coalesce(description, '')
+                           ),
+                           plainto_tsquery('english', :query)
+                       ) AS rank
+                FROM aerospace_entities
+                WHERE to_tsvector('english',
+                          coalesce(display_name, '') || ' ' ||
+                          coalesce(description, '')
+                      ) @@ plainto_tsquery('english', :query)
+                  AND is_active = true
+                  AND lifecycle_status = 'published'
+                  {class_filter}
+                ORDER BY rank DESC, confidence_score DESC
+                LIMIT :limit
+            """),
+            params
+        )).fetchall()
+    except Exception as e:
+        logger.warning(f"fulltext_search failed: {e}")
+        return {"query": q, "count": 0, "results": []}
 
     return {
-        "query":    q,
-        "count":    len(results),
-        "results":  [
+        "query":   q,
+        "count":   len(results),
+        "results": [
             {
                 "aqid":             row[0],
                 "entity_class":     row[1],

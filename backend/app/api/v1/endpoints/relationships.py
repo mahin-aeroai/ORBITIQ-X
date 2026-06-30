@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from caem.base import EntityClass, VerificationStatus
 from caem.relationships import RelationshipType, AerospaceRelationship
@@ -252,7 +253,9 @@ async def validate_relationship(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_relationship(
-    request:    RelationshipCreateRequest,
+    request: RelationshipCreateRequest,
+    pg=Depends(get_pg_session),
+    neo4j=Depends(get_neo4j_driver),
 ):
     """
     Create a relationship between two entities.
@@ -309,7 +312,7 @@ async def create_relationship(
     # Write to PostgreSQL cache
     defn = RELATIONSHIP_REGISTRY.get(request.relationship_type)
     try:
-        pg.execute("""
+        await pg.execute(text("""
             INSERT INTO entity_relationships_cache (
                 rel_id, source_aqid, target_aqid, relationship_type,
                 category, since, until, is_current, confidence,
@@ -317,13 +320,13 @@ async def create_relationship(
             ) VALUES (
                 :rel_id, :source_aqid, :target_aqid, :rel_type,
                 :category, :since, :until, true, :confidence,
-                :provenance_url, :properties::jsonb, now()
+                :provenance_url, :properties, now()
             )
             ON CONFLICT (rel_id) DO UPDATE SET
                 confidence  = EXCLUDED.confidence,
                 is_current  = true,
                 synced_at   = now()
-        """, {
+        """), {
             "rel_id":           rel.rel_id,
             "source_aqid":      rel.source_aqid,
             "target_aqid":      rel.target_aqid,
@@ -335,6 +338,7 @@ async def create_relationship(
             "provenance_url":   rel.provenance_url,
             "properties":       json.dumps(rel.properties),
         })
+        await pg.commit()
     except Exception as e:
         logger.warning(f"PostgreSQL relationship cache write failed (non-blocking): {e}")
 
@@ -351,6 +355,7 @@ async def create_relationship(
 async def get_temporal_snapshot_endpoint(
     aqid:           str,
     snapshot_date:  str = Query(..., description="ISO date: YYYY-MM-DD"),
+    neo4j=Depends(get_neo4j_driver),
 ):
     """
     Return all relationships that were active for an entity at a specific date.
@@ -380,6 +385,7 @@ async def execute_traversal(
     aqid:       str = Query(..., description="Center entity AQID"),
     depth:      int = Query(2, ge=1, le=4),
     limit:      int = Query(100, ge=1, le=500),
+    neo4j=Depends(get_neo4j_driver),
 ):
     """
     Execute a named traversal pattern from the CAEM traversal library.
@@ -441,6 +447,8 @@ async def list_traversal_patterns():
 async def soft_delete_relationship(
     rel_id:     str,
     reason:     Optional[str] = Query(None),
+    pg=Depends(get_pg_session),
+    neo4j=Depends(get_neo4j_driver),
 ):
     """
     Soft-delete a relationship by setting is_current=False in Neo4j and the cache.
@@ -448,11 +456,12 @@ async def soft_delete_relationship(
     """
     # Update PostgreSQL cache
     try:
-        pg.execute("""
+        await pg.execute(text("""
             UPDATE entity_relationships_cache
             SET is_current = false
             WHERE rel_id = :rel_id
-        """, {"rel_id": rel_id})
+        """), {"rel_id": rel_id})
+        await pg.commit()
     except Exception as e:
         logger.warning(f"Cache soft-delete failed for {rel_id}: {e}")
 
