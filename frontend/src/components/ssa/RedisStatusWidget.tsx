@@ -81,8 +81,11 @@ export function RedisStatusWidget() {
     }
   };
 
+  const [activateError, setActivateError] = useState<string | null>(null);
+
   const handleActivate = async () => {
     setActivating(true);
+    setActivateError(null);
     try {
       // Note: the real endpoint is /propagate, not /activate.
       // /activate only exists under /api/v2/digital-twin (a separate router).
@@ -94,21 +97,37 @@ export function RedisStatusWidget() {
         },
         body: JSON.stringify({}),
       });
-      if (!res.ok) throw new Error(`${res.status}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`HTTP ${res.status}: ${body.slice(0, 200)}`);
+      }
 
       // Propagating 29,198 objects takes 30-120s — poll /status every 5s
       // until objects_propagated > 0 or we give up after 2 minutes.
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts += 1;
-        await queryClient.invalidateQueries({ queryKey: ["dt-status"] });
-        const latest = queryClient.getQueryData<any>(["dt-status"]);
-        if ((latest?.objects_propagated ?? 0) > 0 || attempts >= 24) {
+        try {
+          await queryClient.invalidateQueries({ queryKey: ["dt-status"] });
+          const latest = queryClient.getQueryData<any>(["dt-status"]);
+          if (latest?.last_error) {
+            clearInterval(poll);
+            setActivateError(latest.last_error);
+            setActivating(false);
+            return;
+          }
+          if ((latest?.objects_propagated ?? 0) > 0 || attempts >= 24) {
+            clearInterval(poll);
+            setActivating(false);
+          }
+        } catch (pollErr: any) {
           clearInterval(poll);
+          setActivateError(`Polling failed: ${pollErr?.message ?? pollErr}`);
           setActivating(false);
         }
       }, 5000);
-    } catch {
+    } catch (err: any) {
+      setActivateError(err?.message ?? String(err));
       setActivating(false);
     }
   };
@@ -199,6 +218,14 @@ export function RedisStatusWidget() {
               className="rounded p-2 font-mono text-[9px] leading-relaxed"
             >
               ⚠ Last propagation failed: {dtStatus.last_error.slice(0, 120)}
+            </div>
+          )}
+          {activateError && (
+            <div
+              style={{ color: "#ef4444", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+              className="rounded p-2 font-mono text-[9px] leading-relaxed"
+            >
+              ⚠ Activate request failed: {activateError.slice(0, 200)}
             </div>
           )}
           <StatRow label="SSE alerts" value={redisConnected ? "active" : "polling fallback"}
