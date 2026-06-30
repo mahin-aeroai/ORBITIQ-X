@@ -19,6 +19,13 @@ async function apiFetch(path: string) {
   return res.json();
 }
 
+// /health and /ready live at the FastAPI app root, NOT under /api/v1
+async function rootFetch(path: string) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+}
+
 const SERVICES = [
   { key: "backend",    label: "FastAPI Backend",    host: "Railway",      color: "#818cf8", icon: "⚡" },
   { key: "frontend",   label: "Next.js Frontend",   host: "Vercel",       color: "#34d399", icon: "🌐" },
@@ -55,14 +62,14 @@ function ServiceRow({ label, host, color, icon, status }: any) {
 export default function InfrastructurePage() {
   const { data: health } = useQuery({
     queryKey: ["infra-health"],
-    queryFn: () => apiFetch("/health"),
+    queryFn: () => rootFetch("/health"),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
 
   const { data: ready } = useQuery({
     queryKey: ["infra-ready"],
-    queryFn: () => apiFetch("/ready"),
+    queryFn: () => rootFetch("/ready"),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
@@ -77,7 +84,7 @@ export default function InfrastructurePage() {
   const statuses: Record<string, string> = {
     backend:    health?.status === "ok" ? "healthy" : "unavailable",
     frontend:   "healthy",
-    postgres:   ready?.database ?? (ready?.status === "ready" ? "healthy" : "checking"),
+    postgres:   ready?.database === "healthy" ? "healthy" : (ready?.status === "ready" ? "healthy" : "checking"),
     neo4j:      "connected",
     qdrant:     "connected",
     redis:      dtStatus?.connected ? "connected" : "unavailable",
