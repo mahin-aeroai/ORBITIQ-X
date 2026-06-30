@@ -262,9 +262,9 @@ async def create_entity(
             created_at, updated_at
         ) VALUES (
             :aqid, :entity_class, :display_name, :short_name, :description,
-            :tags, :domains, :extension_data,
+            :tags::jsonb, :domains::jsonb, :extension_data::jsonb,
             'draft', 0.50,
-            :primary_provenance, 'unverified',
+            :primary_provenance::jsonb, 'unverified',
             'api', 'api', :now, :now
         )
     """), {
@@ -357,11 +357,11 @@ async def update_entity(
         params["long_description"] = request.long_description
 
     if request.tags is not None:
-        set_clauses.append("tags = :tags")
+        set_clauses.append("tags = :tags::jsonb")
         params["tags"] = json.dumps(request.tags)
 
     if request.domains is not None:
-        set_clauses.append("domains = :domains")
+        set_clauses.append("domains = :domains::jsonb")
         params["domains"] = json.dumps(request.domains)
 
     if request.lifecycle_status is not None:
@@ -369,7 +369,7 @@ async def update_entity(
         params["lifecycle_status"] = request.lifecycle_status.value
 
     if request.extension_data is not None:
-        set_clauses.append("extension_data = extension_data || :extension_data")
+        set_clauses.append("extension_data = extension_data || :extension_data::jsonb")
         params["extension_data"] = json.dumps(request.extension_data)
 
     if len(set_clauses) == 2:
@@ -518,7 +518,7 @@ async def add_source(
 
     await pg.execute(text("""
         UPDATE aerospace_entities
-        SET all_sources         = all_sources || :source,
+        SET all_sources         = all_sources || :source::jsonb,
             ai_requires_refresh = true,
             updated_at          = now()
         WHERE aqid = :aqid
@@ -657,8 +657,20 @@ async def seed_flagship_entities(pg=Depends(get_pg_session)):
             skipped.append(record["aqid"])
             continue
 
+        # JSONB columns need an explicit ::jsonb cast on their placeholder —
+        # asyncpg binds Python str parameters as plain text by default, and
+        # PostgreSQL does not implicitly cast an unknown-typed text parameter
+        # to jsonb in an INSERT VALUES context (only string *literals* get
+        # that implicit cast). Without this, every insert here would fail
+        # with something like:
+        #   asyncpg.exceptions.DatatypeMismatchError: column "tags" is of
+        #   type jsonb but expression is of type character varying
+        _JSONB_COLUMNS = {"aliases", "tags", "domains", "extension_data", "primary_provenance"}
         columns = ", ".join(record.keys())
-        placeholders = ", ".join(f":{k}" for k in record.keys())
+        placeholders = ", ".join(
+            f":{k}::jsonb" if k in _JSONB_COLUMNS else f":{k}"
+            for k in record.keys()
+        )
         await pg.execute(
             text(f"INSERT INTO aerospace_entities ({columns}) VALUES ({placeholders})"),
             record,

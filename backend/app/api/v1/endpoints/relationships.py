@@ -320,7 +320,7 @@ async def create_relationship(
             ) VALUES (
                 :rel_id, :source_aqid, :target_aqid, :rel_type,
                 :category, :since, :until, true, :confidence,
-                :provenance_url, :properties, now()
+                :provenance_url, :properties::jsonb, now()
             )
             ON CONFLICT (rel_id) DO UPDATE SET
                 confidence  = EXCLUDED.confidence,
