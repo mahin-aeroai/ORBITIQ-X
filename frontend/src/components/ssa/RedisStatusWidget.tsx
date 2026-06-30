@@ -84,10 +84,29 @@ export function RedisStatusWidget() {
   const handleActivate = async () => {
     setActivating(true);
     try {
-      await apiFetch("/digital-twin/activate", "POST");
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["dt-status"] });
-        setActivating(false);
+      // Note: the real endpoint is /propagate, not /activate.
+      // /activate only exists under /api/v2/digital-twin (a separate router).
+      const res = await fetch(`${V1}/digital-twin/propagate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(getApiAccessToken() ? { Authorization: `Bearer ${getApiAccessToken()}` } : {}),
+        },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+
+      // Propagating 29,198 objects takes 30-120s — poll /status every 5s
+      // until objects_propagated > 0 or we give up after 2 minutes.
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts += 1;
+        await queryClient.invalidateQueries({ queryKey: ["dt-status"] });
+        const latest = queryClient.getQueryData<any>(["dt-status"]);
+        if ((latest?.objects_propagated ?? 0) > 0 || attempts >= 24) {
+          clearInterval(poll);
+          setActivating(false);
+        }
       }, 5000);
     } catch {
       setActivating(false);
@@ -95,13 +114,23 @@ export function RedisStatusWidget() {
   };
 
   const handleCatalogSync = async (mode: "full" | "incremental") => {
-    await apiFetch(`/digital-twin/catalog-sync?mode=${mode}`, "POST");
+    // Real endpoint is POST /catalog/sync with mode in the JSON body —
+    // not /digital-twin/catalog-sync (that only exists under /api/v2).
+    const token = getApiAccessToken();
+    await fetch(`${V1}/catalog/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ mode }),
+    });
     setTimeout(() => queryClient.invalidateQueries({ queryKey: ["dt-status"] }), 3000);
   };
 
   const redisConnected = redisStatus?.connected ?? false;
-  const dtInitialized  = dtStatus?.twin_initialized ?? false;
   const dtStatusLabel  = dtStatus?.status ?? "unknown";
+  const dtInitialized  = dtStatusLabel === "operational" || (dtStatus?.objects_propagated ?? 0) > 0;
 
   return (
     <div
@@ -158,11 +187,14 @@ export function RedisStatusWidget() {
             value={dtInitialized ? "active" : "not initialised"}
             color={dtInitialized ? "#34d399" : "#fbbf24"}
           />
-          {dtStatus?.propagated_objects > 0 && (
-            <StatRow label="Propagated objects" value={dtStatus.propagated_objects.toLocaleString()} />
+          {(dtStatus?.objects_propagated ?? 0) > 0 && (
+            <StatRow label="Propagated objects" value={dtStatus.objects_propagated.toLocaleString()} />
           )}
-          <StatRow label="SSE alerts" value={dtStatus?.capabilities?.conjunction_sse ? "active" : "polling fallback"}
-            color={dtStatus?.capabilities?.conjunction_sse ? "#34d399" : "#fbbf24"} />
+          {dtStatus?.last_propagation && (
+            <StatRow label="Last propagation" value={new Date(dtStatus.last_propagation).toLocaleTimeString()} />
+          )}
+          <StatRow label="SSE alerts" value={redisConnected ? "active" : "polling fallback"}
+            color={redisConnected ? "#34d399" : "#fbbf24"} />
         </div>
 
         {/* Impact list when Redis is down */}
