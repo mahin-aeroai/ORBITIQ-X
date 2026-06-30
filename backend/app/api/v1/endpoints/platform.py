@@ -131,11 +131,11 @@ async def _probe_minio() -> dict[str, Any]:
 async def _probe_digital_twin() -> dict[str, Any]:
     try:
         from app.digital_twin.services.orbital_state_service import (
-            get_live_states, get_propagation_meta,
+            get_propagation_meta_shared,
         )
-        states = get_live_states()
-        meta   = get_propagation_meta()
-        last   = meta.get("last_propagation")
+        meta = await get_propagation_meta_shared()
+        last = meta.get("last_propagation")
+        objects_propagated = meta.get("objects_propagated", 0)
 
         age_minutes = None
         if last:
@@ -148,14 +148,14 @@ async def _probe_digital_twin() -> dict[str, Any]:
                 pass
 
         status = "healthy"
-        if not states:
+        if objects_propagated == 0:
             status = "not_initialised"
         elif age_minutes is not None and age_minutes > 30:
             status = "stale"
 
         return {
             "status":             status,
-            "objects":            meta.get("objects_propagated", 0),
+            "objects":            objects_propagated,
             "last_propagation":   last,
             "age_minutes":        age_minutes,
             "propagation_seconds":meta.get("propagation_seconds"),
@@ -379,15 +379,14 @@ async def platform_status() -> ORJSONResponse:
     twin_info: dict = {}
     try:
         from app.digital_twin.services.orbital_state_service import (
-            get_propagation_meta, get_live_states,
+            get_propagation_meta_shared,
         )
-        meta   = get_propagation_meta()
-        states = get_live_states()
+        meta = await get_propagation_meta_shared()
         twin_info = {
             "objects_propagated":  meta.get("objects_propagated", 0),
             "last_propagation":    meta.get("last_propagation"),
             "propagation_seconds": meta.get("propagation_seconds"),
-            "live_objects":        len(states),
+            "live_objects":        meta.get("objects_propagated", 0),
         }
     except Exception as exc:
         twin_info = {"error": str(exc)[:80]}

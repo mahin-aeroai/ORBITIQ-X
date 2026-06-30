@@ -363,21 +363,24 @@ async def get_regime_health() -> ORJSONResponse:
 )
 async def get_twin_status() -> ORJSONResponse:
     from app.digital_twin.services.orbital_state_service import (
-        get_live_states, get_propagation_meta
+        get_live_states, get_propagation_meta_shared
     )
     from app.digital_twin.repositories.digital_twin_repository import _FORECAST_CACHE
 
     states = get_live_states()
-    meta   = get_propagation_meta()
+    meta   = await get_propagation_meta_shared()
 
-    # Regime counts
+    # Regime counts — only reflects this worker's local state (regime
+    # breakdown isn't cached to Redis, just the summary count). If this
+    # worker hasn't propagated locally, this will be empty even though
+    # objects_propagated above correctly reflects another worker's run.
     regime_counts: dict[str, int] = {}
     for s in states.values():
         r = s.orbital_regime.value
         regime_counts[r] = regime_counts.get(r, 0) + 1
 
     return ORJSONResponse(content={
-        "status":             "operational" if states else "not_initialised",
+        "status":             "operational" if meta["objects_propagated"] > 0 else "not_initialised",
         "last_propagation":   meta["last_propagation"],
         "objects_propagated": meta["objects_propagated"],
         "propagation_seconds":meta["propagation_seconds"],

@@ -186,6 +186,7 @@ _PROPAGATION_DURATION_S: float = 0.0
 _LAST_PROPAGATION_ERROR: str | None = None
 
 REDIS_KEY_PREFIX  = "twin:state:"
+REDIS_META_KEY    = "twin:propagation_meta"
 REDIS_TTL_SECONDS = 900   # 15 minutes
 
 
@@ -201,6 +202,49 @@ def get_propagation_meta() -> dict:
         "propagation_seconds": round(_PROPAGATION_DURATION_S, 1),
         "last_error":          _LAST_PROPAGATION_ERROR,
     }
+
+
+async def get_propagation_meta_shared(redis_client=None) -> dict:
+    """
+    Cross-worker-aware version of get_propagation_meta().
+
+    With gunicorn running multiple worker processes, _LIVE_STATES is
+    independent per-process — a request handled by a worker that never
+    ran propagate_catalog() itself would otherwise always report 0
+    objects, even right after another worker successfully propagated
+    the full catalog. This checks the local in-memory state first
+    (fast path, correct for whichever worker actually ran propagation),
+    and falls back to the small shared Redis summary blob
+    (REDIS_META_KEY) if the local count is zero but a real propagation
+    happened recently on a different worker.
+    """
+    local_meta = get_propagation_meta()
+    if local_meta["objects_propagated"] > 0:
+        return local_meta
+
+    redis = redis_client
+    if redis is None:
+        try:
+            from app.db.redis_session import get_redis
+            redis = get_redis()
+        except Exception:
+            redis = None
+
+    if redis:
+        try:
+            raw = await redis.get(REDIS_META_KEY)
+            if raw:
+                shared = json.loads(raw)
+                return {
+                    "last_propagation":    shared.get("last_propagation"),
+                    "objects_propagated":  shared.get("objects_propagated", 0),
+                    "propagation_seconds": shared.get("propagation_seconds", 0.0),
+                    "last_error":          local_meta["last_error"],
+                }
+        except Exception as exc:
+            logger.debug("propagation_meta_redis_read_failed error=%s", exc)
+
+    return local_meta
 
 
 class OrbitalStateService:
@@ -276,8 +320,17 @@ class OrbitalStateService:
             _PROPAGATION_DURATION_S = time.perf_counter() - t0
             _LAST_PROPAGATION_ERROR = None
 
-            # Mirror to Redis
+            # Mirror to Redis — both per-satellite state AND a small
+            # summary blob so other gunicorn worker processes (which
+            # have their own independent _LIVE_STATES in memory) can
+            # report accurate status without needing to scan every
+            # twin:state:* key just to get a count.
             await self._cache_to_redis(states)
+            await self._cache_meta_to_redis({
+                "last_propagation":   epoch.isoformat(),
+                "objects_propagated": ok,
+                "propagation_seconds": round(_PROPAGATION_DURATION_S, 1),
+            })
 
         except Exception as exc:
             _LAST_PROPAGATION_ERROR = f"{type(exc).__name__}: {exc}"
@@ -552,6 +605,24 @@ class OrbitalStateService:
             logger.debug("redis_cache_updated objects=%d", len(states))
         except Exception as exc:
             logger.warning("redis_cache_failed error=%s", exc)
+
+    async def _cache_meta_to_redis(self, meta: dict) -> None:
+        """
+        Cache a small propagation summary blob to Redis under a single key
+        (REDIS_META_KEY), separate from the per-satellite twin:state:* keys.
+
+        With multiple gunicorn workers, each has its own independent
+        in-memory _LIVE_STATES — a worker that never ran propagate_catalog()
+        itself would otherwise always report objects_propagated=0 / NOT_INIT
+        even after another worker successfully propagated the full catalog.
+        This lets every worker read the real shared status from Redis.
+        """
+        if not self._redis:
+            return
+        try:
+            await self._redis.setex(REDIS_META_KEY, REDIS_TTL_SECONDS, json.dumps(meta))
+        except Exception as exc:
+            logger.warning("redis_meta_cache_failed error=%s", exc)
 
     async def get_state_from_redis(self, norad_id: int) -> SatelliteState | None:
         """Try Redis first, fall back to in-memory cache."""
