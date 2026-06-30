@@ -30,7 +30,14 @@ Overall status
   unhealthy — postgres or digital_twin unavailable
 
 Core services (outage → unhealthy): postgres
-Non-core (outage → degraded):       redis, neo4j, vector_store, minio
+Non-core (outage → degraded):       redis, neo4j, vector_store
+
+MinIO is tracked in the service matrix for visibility but is excluded
+from the overall status rollup. It is not currently provisioned on
+Railway and no platform feature depends on it yet — it was scaffolded
+for future TLE/document/model artifact storage. Counting it toward
+"degraded" would make every health check falsely report a platform-wide
+problem for a service that was never meant to be live.
 
 This endpoint requires authentication (any role).
 """
@@ -307,19 +314,28 @@ async def platform_health() -> ORJSONResponse:
 
     # Update Prometheus gauges
     try:
-        from app.core.metrics import REDIS_AVAILABLE, NEO4J_AVAILABLE, MINIO_AVAILABLE, VECTOR_STORE_AVAILABLE
+        from app.core.metrics import REDIS_AVAILABLE, NEO4J_AVAILABLE, VECTOR_STORE_AVAILABLE
         REDIS_AVAILABLE.set(1 if services["redis"].get("status") == "healthy" else 0)
         NEO4J_AVAILABLE.set(1 if services["neo4j"].get("status") == "healthy" else 0)
-        MINIO_AVAILABLE.set(1 if services["minio"].get("status") == "healthy" else 0)
         VECTOR_STORE_AVAILABLE.set(1 if services["vector_store"].get("status") == "healthy" else 0)
     except Exception:
         pass
 
-    # Determine overall status
+    # Determine overall status.
+    # NOTE: MinIO is intentionally excluded from this check. It is not
+    # currently provisioned on Railway and nothing in the platform
+    # actually depends on it yet (the minio Python SDK is in
+    # requirements/base.txt but never imported anywhere in app code —
+    # it was scaffolded for future TLE/document/model artifact storage
+    # and never wired up). Counting it toward "degraded" makes every
+    # health check report a false platform-wide problem for a service
+    # that was never meant to be live. It still appears in the service
+    # matrix below as "unavailable" for visibility — it just no longer
+    # affects the overall rollup status.
     core_healthy = services["postgres"].get("status") == "healthy"
     non_core_unhealthy = any(
         services[svc].get("status") not in ("healthy", "operational", "running", "not_initialised", "unknown")
-        for svc in ("redis", "neo4j", "vector_store", "minio")
+        for svc in ("redis", "neo4j", "vector_store")
     )
 
     if not core_healthy:
