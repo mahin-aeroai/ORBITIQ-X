@@ -142,10 +142,36 @@ async def trigger_run(
         )
 
     def _run_background():
+        # IMPORTANT: do NOT reuse the request-scoped async `pg` session here.
+        # FastAPI closes get_pg_session()'s session as soon as this request's
+        # response is sent — BackgroundTasks callbacks run AFTER that point,
+        # so the outer `pg` would already be closed/invalid by the time this
+        # function body actually executes. IngestionOrchestrator also needs
+        # a SYNC session (unawaited self.pg.execute() throughout
+        # pipeline.py/orchestrator.py/provenance/service.py), not the async
+        # one anyway — so this creates its own fresh sync session, exactly
+        # like get_sync_pg_session() does for provenance.py, scoped to the
+        # lifetime of this background task only.
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.core.config import get_settings
         from caem.ingestion.orchestrator import IngestionOrchestrator
-        orchestrator = IngestionOrchestrator(pg, neo4j, qdrant)
-        orchestrator.register_adapter(adapter_name)
-        orchestrator.run_adapter(adapter_name)
+
+        settings = get_settings()
+        sync_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        engine = create_engine(sync_url, pool_pre_ping=True, pool_size=1, max_overflow=1)
+        SessionLocal = sessionmaker(bind=engine)
+        bg_session = SessionLocal()
+
+        try:
+            orchestrator = IngestionOrchestrator(bg_session, neo4j, qdrant)
+            orchestrator.register_adapter(adapter_name)
+            orchestrator.run_adapter(adapter_name)
+        except Exception:
+            logger.exception("ingestion_background_run_failed adapter=%s", adapter_name)
+        finally:
+            bg_session.close()
+            engine.dispose()
 
     background.add_task(_run_background)
 
