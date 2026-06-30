@@ -56,23 +56,29 @@ from app.digital_twin.models.twin_models import (
 
 logger = logging.getLogger(__name__)
 
-# Add orbital-engine to path.
+# ── orbital-engine loader (collision-proof) ─────────────────────────────────
 #
-# Local dev layout:   <repo>/backend/app/digital_twin/services/this_file.py
-#                     parents[4] = <repo>           → <repo>/orbital-engine ✓
+# PROBLEM: multiple sibling directories in this monorepo (agents/, rag/,
+# orbital-engine/, knowledge-graph/) each have their own top-level package
+# literally named "src". Several backend services insert their own
+# directory at sys.path[0] (agent_service.py, graphrag_bridge.py, this
+# file, etc.) so that "import src.whatever" resolves to *their* src/.
 #
-# Railway Docker layout (Dockerfile.railway):
-#   WORKDIR /app
-#   COPY backend/ .                    → backend/app/... becomes /app/app/...
-#   COPY orbital-engine/ /app/orbital-engine/
-#   So this file lives at /app/app/digital_twin/services/this_file.py
-#     parents[4] = /                   → WRONG: computes /orbital-engine (doesn't exist)
-#   The correct path in the container is /app/orbital-engine.
+# Because sys.path is global and import order depends on which service
+# module happens to load first during app startup, "from src.propagator
+# import X" is NOT reliable here — it silently resolves to whichever
+# src/ package won the race, which is often agents/src or rag/src,
+# neither of which has a "propagator" submodule. This caused
+# ModuleNotFoundError: No module named 'src.propagator' in production
+# even though orbital-engine/src/propagator/ genuinely exists on disk.
 #
-# Rather than hard-code a parents[N] index that breaks when copied into a
-# different directory depth, walk upward from this file looking for a
-# directory that actually contains "orbital-engine", trying both the
-# local dev depth and the container depth explicitly as a fallback.
+# FIX: load orbital-engine's src package under a private, collision-free
+# name (_orbital_engine_src) via importlib, using an absolute file path.
+# This never touches the shared "src" name in sys.modules, so it cannot
+# be shadowed by — or shadow — any other service's src/ package.
+
+import importlib.util
+
 _THIS_FILE = pathlib.Path(__file__).resolve()
 _OE_CANDIDATES = [
     _THIS_FILE.parents[4] / "orbital-engine",   # local dev: <repo>/orbital-engine
@@ -80,9 +86,97 @@ _OE_CANDIDATES = [
     pathlib.Path("/app/orbital-engine"),        # explicit Railway fallback
 ]
 _OE_ROOT = next((p for p in _OE_CANDIDATES if p.is_dir()), _OE_CANDIDATES[0])
-if str(_OE_ROOT) not in sys.path:
-    sys.path.insert(0, str(_OE_ROOT))
 logger.info("orbital_engine_path_resolved path=%s exists=%s", _OE_ROOT, _OE_ROOT.is_dir())
+
+
+def _load_orbital_engine_module(dotted_path: str):
+    """
+    Import a module from orbital-engine/src/<dotted_path> under a private
+    namespace, bypassing the global 'src' package name collision.
+
+    Registers the bare root package first (required for any ".." relative
+    import that walks up to src/ itself — e.g. conjunction/screener.py's
+    "from ..propagator.sgp4_propagator import X"), then every parent
+    package in the requested dotted path, then the target module itself.
+
+    Example: _load_orbital_engine_module("propagator.sgp4_propagator")
+             → loads orbital-engine/src/propagator/sgp4_propagator.py
+               as '_orbital_engine_src.propagator.sgp4_propagator'
+    """
+    ROOT_NAME = "_orbital_engine_src"
+
+    if ROOT_NAME not in sys.modules:
+        root_init = _OE_ROOT / "src" / "__init__.py"
+        if not root_init.is_file():
+            raise ModuleNotFoundError(
+                f"orbital-engine src/__init__.py not found at {root_init} "
+                f"(OE_ROOT={_OE_ROOT} exists={_OE_ROOT.is_dir()})"
+            )
+        spec = importlib.util.spec_from_file_location(
+            ROOT_NAME, root_init,
+            submodule_search_locations=[str(_OE_ROOT / "src")],
+        )
+        root_module = importlib.util.module_from_spec(spec)
+        sys.modules[ROOT_NAME] = root_module
+        spec.loader.exec_module(root_module)
+
+    parts = dotted_path.split(".")
+    accumulated: list[str] = []
+
+    for part in parts:
+        accumulated.append(part)
+        sub_dotted    = ".".join(accumulated)
+        private_name  = f"{ROOT_NAME}.{sub_dotted}"
+        if private_name in sys.modules:
+            continue
+
+        rel_path  = pathlib.Path(*accumulated)
+        pkg_init  = _OE_ROOT / "src" / rel_path / "__init__.py"
+        pkg_dir   = _OE_ROOT / "src" / rel_path
+        mod_file  = (_OE_ROOT / "src" / rel_path).with_suffix(".py")
+
+        if mod_file.is_file():
+            file_path, is_package = mod_file, False
+        elif pkg_init.is_file():
+            file_path, is_package = pkg_init, True
+        elif pkg_dir.is_dir():
+            # Directory exists with Python files but no __init__.py — treat
+            # as an implicit namespace package rather than failing outright.
+            # (orbital-engine has had a few subpackages missing __init__.py;
+            # this keeps the loader resilient if that recurs.)
+            spec = importlib.util.spec_from_file_location(
+                private_name, None,
+                submodule_search_locations=[str(pkg_dir)],
+            )
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[private_name] = module
+            continue
+        else:
+            raise ModuleNotFoundError(
+                f"orbital-engine module not found: {sub_dotted} "
+                f"(looked for {mod_file} and {pkg_init}, "
+                f"OE_ROOT={_OE_ROOT} exists={_OE_ROOT.is_dir()})"
+            )
+
+        spec = importlib.util.spec_from_file_location(
+            private_name,
+            file_path,
+            submodule_search_locations=[str(file_path.parent)] if is_package else None,
+        )
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[private_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            # If exec fails partway through, remove the half-initialized
+            # module from sys.modules so it doesn't poison future import
+            # attempts (Python registers the module object before running
+            # its body, to support circular imports — but a failed exec
+            # leaves a broken module cached under this name otherwise).
+            del sys.modules[private_name]
+            raise
+
+    return sys.modules[f"{ROOT_NAME}.{dotted_path}"]
 
 # ── In-memory live state cache ────────────────────────────────
 # Primary live store. Redis mirrors this for multi-process access.
@@ -236,10 +330,13 @@ class OrbitalStateService:
         Synchronous propagation of a satellite batch.
         Calls existing SGP4Propagator.propagate_single() for each object.
         """
-        from src.propagator.sgp4_propagator import SGP4Propagator
-        from src.propagator.tle_parser import parse_tle
-        from src.propagator.validators import validate_tle_epoch
-        from src.classifier.orbit_classifier import OrbitClassifier, OrbitalElements
+        _sgp4_mod      = _load_orbital_engine_module("propagator.sgp4_propagator")
+        _tle_parser    = _load_orbital_engine_module("propagator.tle_parser")
+        _classifier_mod = _load_orbital_engine_module("classifier.orbit_classifier")
+
+        SGP4Propagator    = _sgp4_mod.SGP4Propagator
+        parse_tle         = _tle_parser.parse_tle
+        OrbitClassifier   = _classifier_mod.OrbitClassifier
 
         propagator = SGP4Propagator(wgs_model=72)
         classifier = OrbitClassifier()
@@ -258,8 +355,12 @@ class OrbitalStateService:
                 from unittest.mock import patch as _patch
                 tle = parse_tle(name, l1, l2)
 
-                # Bypass stale TLE epoch check for historical TLEs
-                with _patch("src.propagator.sgp4_propagator.validate_tle_epoch"):
+                # Bypass stale TLE epoch check for historical TLEs.
+                # Patch target must match the private module name under which
+                # sgp4_propagator was actually loaded (see _load_orbital_engine_module),
+                # not the ambiguous 'src.propagator...' string — that name is
+                # never registered in sys.modules under our private loader.
+                with _patch.object(_sgp4_mod, "validate_tle_epoch", lambda *a, **k: None):
                     svs = propagator.propagate_single(tle, [epoch])
 
                 if not svs or not svs[0].is_nominal:

@@ -48,6 +48,118 @@ from app.services.conjunction_service import ConjunctionPersistenceService
 logger = logging.getLogger(__name__)
 
 
+# ── orbital-engine loader (collision-proof) ─────────────────────────────────
+# See orbital_state_service.py for the full explanation of why this exists:
+# multiple sibling monorepo directories (agents/, rag/, orbital-engine/) each
+# define their own top-level "src" package, and several services insert
+# their own directory at sys.path[0]. "from src.X import Y" is therefore
+# unreliable — it can silently resolve to the wrong sibling's src/ package
+# depending on import order, producing ModuleNotFoundError for submodules
+# that exist on disk but not in whichever src/ won the race.
+#
+# This loads orbital-engine's src package under a private, collision-free
+# namespace via importlib + an absolute file path, bypassing the shared
+# "src" name in sys.modules entirely.
+
+import importlib.util
+import pathlib
+import sys as _sys
+
+_THIS_FILE = pathlib.Path(__file__).resolve()
+_OE_CANDIDATES = [
+    _THIS_FILE.parents[3] / "orbital-engine",   # local dev: backend/app/services -> repo_root/orbital-engine
+    _THIS_FILE.parents[2] / "orbital-engine",   # Railway:   /app/app/services -> /app/orbital-engine
+    pathlib.Path("/app/orbital-engine"),        # explicit Railway fallback
+]
+_OE_ROOT = next((p for p in _OE_CANDIDATES if p.is_dir()), _OE_CANDIDATES[0])
+logger.info("conjunction_oe_path_resolved path=%s exists=%s", _OE_ROOT, _OE_ROOT.is_dir())
+
+
+def _load_orbital_engine_module(dotted_path: str):
+    """
+    Import a module from orbital-engine/src/<dotted_path> under a private
+    namespace (_orbital_engine_src.*).
+
+    Registers the bare root package first (required for screener.py's
+    cross-package "from ..propagator.sgp4_propagator import X" relative
+    import — it needs src/ itself registered as the common parent), then
+    every parent package in the requested dotted path, then the target
+    module itself.
+    """
+    ROOT_NAME = "_orbital_engine_src"
+
+    if ROOT_NAME not in _sys.modules:
+        root_init = _OE_ROOT / "src" / "__init__.py"
+        if not root_init.is_file():
+            raise ModuleNotFoundError(
+                f"orbital-engine src/__init__.py not found at {root_init} "
+                f"(OE_ROOT={_OE_ROOT} exists={_OE_ROOT.is_dir()})"
+            )
+        spec = importlib.util.spec_from_file_location(
+            ROOT_NAME, root_init,
+            submodule_search_locations=[str(_OE_ROOT / "src")],
+        )
+        root_module = importlib.util.module_from_spec(spec)
+        _sys.modules[ROOT_NAME] = root_module
+        spec.loader.exec_module(root_module)
+
+    parts = dotted_path.split(".")
+    accumulated: list[str] = []
+
+    for part in parts:
+        accumulated.append(part)
+        sub_dotted   = ".".join(accumulated)
+        private_name = f"{ROOT_NAME}.{sub_dotted}"
+        if private_name in _sys.modules:
+            continue
+
+        rel_path = pathlib.Path(*accumulated)
+        pkg_init = _OE_ROOT / "src" / rel_path / "__init__.py"
+        pkg_dir  = _OE_ROOT / "src" / rel_path
+        mod_file = (_OE_ROOT / "src" / rel_path).with_suffix(".py")
+
+        if mod_file.is_file():
+            file_path, is_package = mod_file, False
+        elif pkg_init.is_file():
+            file_path, is_package = pkg_init, True
+        elif pkg_dir.is_dir():
+            # Directory exists with Python files but no __init__.py — treat
+            # as an implicit namespace package rather than failing outright.
+            spec = importlib.util.spec_from_file_location(
+                private_name, None,
+                submodule_search_locations=[str(pkg_dir)],
+            )
+            module = importlib.util.module_from_spec(spec)
+            _sys.modules[private_name] = module
+            continue
+        else:
+            raise ModuleNotFoundError(
+                f"orbital-engine module not found: {sub_dotted} "
+                f"(looked for {mod_file} and {pkg_init}, "
+                f"OE_ROOT={_OE_ROOT} exists={_OE_ROOT.is_dir()})"
+            )
+
+        spec = importlib.util.spec_from_file_location(
+            private_name,
+            file_path,
+            submodule_search_locations=[str(file_path.parent)] if is_package else None,
+        )
+        module = importlib.util.module_from_spec(spec)
+        _sys.modules[private_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception:
+            # If exec fails partway through, remove the half-initialized
+            # module from sys.modules so it doesn't poison future import
+            # attempts (Python registers the module object before running
+            # its body, to support circular imports — but a failed exec
+            # leaves a broken module cached under this name otherwise).
+            del _sys.modules[private_name]
+            raise
+
+    return _sys.modules[f"{ROOT_NAME}.{dotted_path}"]
+
+
 # ── CDM generator ─────────────────────────────────────────────
 
 def generate_cdm_document(result) -> dict:
@@ -339,11 +451,10 @@ class ConjunctionAnalysisService:
         max_objects: int | None,
     ):
         """Load active LEO satellites from PostgreSQL and build RSO list."""
-        import sys, pathlib
-        _oe = str(pathlib.Path(__file__).parents[4] / "orbital-engine")
-        if _oe not in sys.path:
-            sys.path.insert(0, _oe)
-        from src.conjunction.screener import RSO, DEFAULT_HBR_SAT_KM, DEFAULT_HBR_DEBRIS_KM
+        _screener_mod = _load_orbital_engine_module("conjunction.screener")
+        RSO                   = _screener_mod.RSO
+        DEFAULT_HBR_SAT_KM    = _screener_mod.DEFAULT_HBR_SAT_KM
+        DEFAULT_HBR_DEBRIS_KM = _screener_mod.DEFAULT_HBR_DEBRIS_KM
 
         satellites = await self._sat_repo.get_active_leos()
         if max_objects:
@@ -368,11 +479,8 @@ class ConjunctionAnalysisService:
 
     def _run_screener_sync(self, rsos, epoch: datetime):
         """Synchronous screener call for run_in_executor."""
-        import sys, pathlib
-        _oe = str(pathlib.Path(__file__).parents[4] / "orbital-engine")
-        if _oe not in sys.path:
-            sys.path.insert(0, _oe)
-        from src.conjunction.screener import ConjunctionScreener
+        _screener_mod      = _load_orbital_engine_module("conjunction.screener")
+        ConjunctionScreener = _screener_mod.ConjunctionScreener
         screener = ConjunctionScreener(
             screen_distance_km=self._screen_distance,
             tca_window_hours=self._tca_window,
