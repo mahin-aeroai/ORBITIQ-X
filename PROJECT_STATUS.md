@@ -1,14 +1,14 @@
 # ORBITIQ-X — Project Status
 
-**Last Updated:** 2026-06-28
-**Current Version:** `v0.4.0`
-**Updated By:** Phase 17.1 — CAEM + Full Platform Activation
+**Last Updated:** 2026-07-01
+**Current Version:** `v0.5.0`
+**Updated By:** Session 2026-06-30 — Platform Stabilisation + Entity Browser Activation
 
 ---
 
 ## Version
 
-`v0.4.0` — Production
+`v0.5.0` — Production
 
 **Production URLs:**
 - Backend: https://orbitiq-x-production.up.railway.app
@@ -18,20 +18,21 @@
 
 ---
 
-## Platform Health (as of 2026-06-28)
+## Platform Health (as of 2026-07-01)
 
 | Service | Status | Detail |
 |---|---|---|
 | PostgreSQL | ✅ healthy | 29,198 satellites · real names 99.5% |
-| Neo4j Aura | ✅ healthy | 29,248 nodes · 118,681 relationships |
-| Qdrant Cloud | ✅ healthy | 185 chunks · aerospace_docs · 384-dim |
+| Redis | ✅ healthy | connected · uptime stable |
+| Neo4j Aura | ✅ healthy | 29,266 nodes · 118,681 relationships |
+| Qdrant Cloud | ✅ healthy | 252 chunks · aerospace_docs · 384-dim |
+| Digital Twin | ✅ operational | 29,184 objects propagated · active |
 | GraphRAG | ✅ operational | full_graphrag mode · 20/20 benchmark (100%) |
 | Agent System | ✅ healthy | 7 specialists · LangGraph + Claude Sonnet 4.6 |
 | Conjunction Engine | ✅ operational | CDM screening active |
 | Scheduler | ✅ running | 5 jobs registered |
-| Redis | ⚠️ pending activation | Add REDIS_URL to Railway Variables → auto-reconnects |
-| Digital Twin | ⚠️ not_initialised | Requires Redis → catalog sync |
-| MinIO | ⚠️ unavailable | Not required for core SSA |
+| MinIO | ⚠️ unavailable | Not provisioned · excluded from health rollup (not load-bearing) |
+| Space-Track account | ⚠️ SUSPENDED | Awaiting reinstatement — email sent 2026-06-30 |
 
 ---
 
@@ -45,20 +46,17 @@
 | Satellite type — debris | 8,392 |
 | Satellite type — rocket body | 2,091 |
 | TLE records | 105,755 |
-| Neo4j nodes | 29,248 |
+| Neo4j nodes | 29,266 |
 | Neo4j relationships | 118,681 |
-| Neo4j constellations | 11 (Starlink 8,917 · OneWeb 452 · Iridium 134) |
-| Neo4j countries | 6 (US 9,394 · CN 2,559 · RU 2,244) |
-| Qdrant corpus chunks | 252 (v0.5 + 67 new) |
-| Corpus domains | 16 (+propulsion/comms/EO/commercial) |
+| Qdrant corpus chunks | 252 (16 domains) |
 | GraphRAG benchmark | 20/20 (100%) |
 | GraphRAG avg latency | ~27,921ms |
-| API endpoints | 152 (+ 12 Intelligence) |
-| Alembic migrations | 14 |
-| Frontend pages | 13 (+ Intelligence Hub) |
+| API endpoints | ~160 |
+| Alembic migrations | 15 |
 | CAEM entity classes | 39 |
 | CAEM relationship types | 76 |
 | CAEM extension schemas | 31 |
+| Flagship entities seeded | 18 (USA/India/France · NASA/ESA/ISRO · SpaceX/Blue Origin/Rocket Lab/ULA · Falcon 9/Heavy/Starship/SLS/Ariane 6 · Artemis II/JWST/ISS) |
 
 ---
 
@@ -66,14 +64,16 @@
 
 | Page | Route | Status |
 |---|---|---|
-| Mission Control | / | ✅ Live — rotating globe, live metrics, health strip |
-| Satellite Catalog | /catalog | ✅ Live — 29,198 RSOs, regime/type filters, detail drawer |
-| Conjunctions | /conjunctions | ✅ Live — Pc analysis, CDM viewer |
-| Agents | /agents | ✅ Live — 7 specialists, task history |
-| Knowledge Graph | /knowledge-graph | ✅ Live — Neo4j analytics, constellation/country/regime |
-| AI Workspace | /intelligence | ✅ Live — GraphRAG Q&A pipeline (all users) |
+| Mission Control | / | ✅ Live |
+| Satellite Catalog | /catalog | ✅ Live |
+| Conjunctions | /conjunctions | ✅ Live |
+| Agents | /agents | ✅ Live |
+| Knowledge Graph | /knowledge-graph | ✅ Live |
+| AI Workspace | /intelligence | ✅ Live |
+| Entity Browser | /entities | ✅ Live — 18 flagship entities seeded |
+| Knowledge Universe | /intelligence-hub | ✅ Live — contracts/investments/history/science |
 | GraphRAG | /graphrag | ✅ Live |
-| Foundation | /foundation | ✅ Live — architecture, benchmark, services |
+| Foundation Model | /foundation | ✅ Live |
 | System Status | /system | ✅ Live |
 | Infrastructure | /infrastructure | ✅ Live |
 
@@ -85,66 +85,52 @@
 |---|---|---|
 | Phase 1–12 | Core backend, auth, SSA, digital twin, conjunction, KG, RAG, agents | ✅ |
 | Phase 13–14 | Next.js frontend — Mission Control, globe, SSE alerts, space weather | ✅ |
-| Phase 14D | Release readiness audit — 8 findings resolved | ✅ |
 | Phase 15A | Railway + Vercel production deployment | ✅ |
 | Phase 15B | Operational configuration — catalog, Neo4j, Qdrant | ✅ |
-| Phase 16A | Neo4j Aura: 29,248 nodes, ORBITS relationships | ✅ |
-| Phase 16B | GraphRAG / Qdrant: `full_graphrag`, 185-chunk corpus | ✅ |
+| Phase 16A | Neo4j Aura: 29,266 nodes, ORBITS relationships | ✅ |
+| Phase 16B | GraphRAG / Qdrant: `full_graphrag`, 252-chunk corpus | ✅ |
 | Phase 16C | AI Mission Intelligence: 4-agent parallel LangGraph | ✅ |
 | Phase 16D | Aerospace Foundation Model: 3 tiers, 17 benchmarks | ✅ |
 | Phase 17 | Full platform activation: names, types, Neo4j enrichment, live pages | ✅ |
-| **Phase 17.1** | **Canonical Aerospace Entity Model (CAEM)** | ✅ |
-| **Phase 17.2** | **Universal Relationship Ontology** | ✅ |
-| **Phase 17.3** | **Provenance & Versioning** | ✅ |
-| **Phase 17.4** | **Knowledge Ingestion Framework** | ✅ |
-| **Phase 17.5** | **Reusable Entity Intelligence Pages** | ✅ |
-| **Phase 17.6** | **Cross-Entity Navigation** | ✅ |
-| **Phase 17.7** | **Business Intelligence Layer** | ✅ |
-| **Phase 17.8** | **Historical Intelligence Layer** | ✅ |
-| **Phase 17.9** | **Scientific Knowledge Layer** | ✅ |
-| **Phase 17.10** | **Aerospace Knowledge Universe v1** | ✅ |
-| **Phase 18** | **Redis Activation + Digital Twin** | ✅ |
-| **Phase 19** | **Corpus Expansion (252 chunks)** | ✅ |
+| Phase 17.1 | Canonical Aerospace Entity Model (CAEM) | ✅ |
+| Phase 17.2 | Universal Relationship Ontology | ✅ |
+| Phase 17.3 | Provenance & Versioning | ✅ |
+| Phase 17.4 | Knowledge Ingestion Framework | ✅ |
+| Phase 17.5 | Reusable Entity Intelligence Pages | ✅ |
+| Phase 17.6 | Cross-Entity Navigation | ✅ |
+| Phase 17.7 | Business Intelligence Layer | ✅ |
+| Phase 17.8 | Historical Intelligence Layer | ✅ |
+| Phase 17.9 | Scientific Knowledge Layer | ✅ |
+| Phase 17.10 | Aerospace Knowledge Universe v1 | ✅ |
+| Phase 18 | Redis Activation + Digital Twin | ✅ |
+| Phase 19 | Corpus Expansion (252 chunks) | ✅ |
+| **Session 2026-06-30** | **Platform Stabilisation — 28 production bugs fixed** | ✅ |
 
 ---
 
-## Phase 17.1 Deliverables — Complete
+## Known Issues & Blockers
 
-| Deliverable | File | Status |
+| Issue | Impact | Status |
 |---|---|---|
-| `BaseAerospaceEntity` + AQID system | `backend/app/caem/base.py` | ✅ |
-| `ProvenanceRecord` + confidence scoring | `backend/app/caem/base.py` | ✅ |
-| 31 typed extension schemas | `backend/app/caem/entities.py` | ✅ |
-| 76 `RelationshipType` values + Cypher builder | `backend/app/caem/relationships.py` | ✅ |
-| Neo4j schema initializer + GDS projections | `backend/app/caem/graph/neo4j_schema.py` | ✅ |
-| 7-stage ingestion pipeline | `backend/app/caem/ingestion/pipeline.py` | ✅ |
-| 9 CAEM REST endpoints | `backend/app/api/v1/endpoints/entities.py` | ✅ |
-| Alembic migration (6 tables) | `backend/alembic/versions/20260628_0011_caem_base_entities.py` | ✅ |
-| Package exports | `backend/app/caem/__init__.py` | ✅ |
-
----
-
-## Known Issues
-
-| Issue | Impact | Workaround / Resolution |
-|---|---|---|
-| Redis unavailable | No real-time SSE alerts · Digital Twin not initialised | Add `REDIS_URL` to Railway env vars |
-| Digital Twin not initialised | Globe shows static positions only | Fix Redis → POST `/api/v1/catalog/sync` |
-| Neo4j `operator_name` not populated | No OPERATED_BY relationships yet | Phase 17.2 — populate from Space-Track ownership data |
-| Schema patches not persisted | `rag/src/models/schemas.py` reverts on fresh clone | File committed to repo — persists on redeploy |
+| Space-Track account suspended | No TLE updates until reinstated | Email sent — awaiting reply |
+| Entity Browser: 0 provenance sources displayed | `primary_provenance` written but ProvenancePanel reads `all_sources` | Minor cosmetic — fix in next session |
+| Entity AI summaries not generated | Async summary generation not triggered for seed entities | Phase 20 |
+| Neo4j relationships: 0 per entity | Graph enrichment not yet run for CAEM entities | Roadmap step 6 |
+| Ingestion pipeline: not yet triggered | All bugs audited and fixed — ready to run once Space-Track reinstated | Roadmap step 4 |
 
 ---
 
 ## Critical Path — Next Actions
 
-1. **Fix Redis** — add `REDIS_URL` env var or Railway Redis service
-2. **Trigger catalog sync** — `POST /api/v1/catalog/sync {"mode":"full"}`
-3. **Digital Twin activates** — 29,198 objects propagated in real-time
-4. **Phase 17.2** — Universal Relationship Ontology: populate operator nodes + OPERATED_BY edges
+1. **Await Space-Track reinstatement** — email sent to admin@space-track.org
+2. **Roadmap step 4: trigger live ingestion** — `POST /api/v2/ingestion/adapters/nasa_missions/run` (small bounded test first)
+3. **Roadmap step 5: schedule periodic ingestion** — configure `ingestion_source_config` entries
+4. **Roadmap step 6: Neo4j relationship enrichment** — Cypher using `extension_data` AQIDs to create edges between 18 seeded entities
+5. **Fix provenance panel** — merge `primary_provenance` into `all_sources` in GET `/entities/{aqid}` response
 
 ---
 
-## v0.4.0 GraphRAG Benchmark
+## v0.4.0 GraphRAG Benchmark Baseline
 
 | Metric | Value |
 |---|---|

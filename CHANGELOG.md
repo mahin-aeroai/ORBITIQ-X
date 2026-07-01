@@ -1,3 +1,48 @@
+## [v0.5.1] — 2026-06-30 — Platform Stabilisation Session
+
+### Fixed — 28 production bugs resolved across a single session
+
+#### Infrastructure
+- **railway.toml watchPatterns** — missing `scripts/**`, `orbital-engine/**`, `agents/**`, `rag/**` entries caused commits touching only those directories to silently never trigger a Railway redeploy. The timezone fix deployed 3 times before this was discovered as the real reason it kept failing.
+- **MinIO excluded from platform health rollup** — MinIO is unprovisioned and has no code dependencies. Its permanent "UNAVAILABLE" status was forcing the platform banner to show "PLATFORM DEGRADED" even when every real feature was healthy.
+- **Multi-worker Digital Twin status** — `--workers 2` means two separate processes; `_LIVE_STATES` is per-process. Post-propagation, requests landing on the non-propagating worker showed `NOT_INIT / Objects: 0`. Fixed by writing a small propagation summary blob to Redis (`twin:propagation_meta`) and reading from it via `get_propagation_meta_shared()` in all status endpoints.
+
+#### Authentication / Frontend
+- **Missing auth headers** — Three frontend files used bare `fetch()` with no auth: `RedisStatusWidget.tsx`, `infrastructure/page.tsx`, `intelligence-hub/page.tsx`. All three now use `getApiAccessToken()` from `lib/api.ts`.
+- **`caem-api.ts` reading localStorage** — Was calling `localStorage.getItem('orbitiq_token')` which is never written anywhere. Token lives only in the in-memory `_accessToken` module variable. Fixed to use `getApiAccessToken()`.
+- **`/health` and `/ready` paths** — Infrastructure page called `apiFetch("/health")` which prepended `/api/v1`, making the real URL `/api/v1/health` (404). Added a separate `rootFetch()` helper for the bare-root endpoints.
+
+#### Backend / Digital Twin
+- **Digital Twin activate button calling wrong endpoint** — Called `POST /api/v1/digital-twin/activate` which doesn't exist. Real endpoint is `POST /api/v1/digital-twin/propagate`. Polling timeout was also 5 seconds for a 30–120 second operation.
+- **`dtStatus` field name mismatches** — Widget read `twin_initialized` (doesn't exist) and `propagated_objects` (backend returns `objects_propagated`). `capabilities.conjunction_sse` was also from a different response schema.
+- **`handleCatalogSync` wrong endpoint** — Called `/digital-twin/catalog-sync?mode=X` (only exists under `/api/v2`). Real endpoint is `POST /api/v1/catalog/sync` with `mode` in the JSON body.
+- **orbital-engine `sys.path` depth wrong in Docker container** — `parents[4]` resolves to repo root locally but to `/` (filesystem root) in the container (different nesting depth after `COPY backend/ .`). Computed `/orbital-engine` instead of `/app/orbital-engine`.
+- **`src` namespace collision** — Five sibling directories (`agents/src`, `rag/src`, `orbital-engine/src`, etc.) all define a `src` package. `from src.propagator import X` resolved to whichever sibling won the `sys.path` insertion race, usually `agents/src`. Replaced with `_load_orbital_engine_module()` using `importlib.util.spec_from_file_location` under the private `_orbital_engine_src.*` namespace with correct parent-package registration and cleanup-on-failure.
+- **9 missing `__init__.py` files** in `orbital-engine/src/` subpackages (`api`, `classifier`, `db`, `errors`, `ingest`, `metrics`, `reentry`, `relative_motion`, `scheduler`).
+- **Background task sync/async session mismatch** — `trigger_run` in `ingestion.py` passed an `AsyncSession` to `IngestionOrchestrator`/`CAEMIngestionPipeline`/`ProvenanceService`, all of which use unawaited sync `self.pg.execute()`. Background task also reused the request-scoped session, which FastAPI closes before the callback runs. Fixed to create a fresh sync session inline inside `_run_background()`.
+
+#### Entity Browser / Seed Pipeline
+- **`::jsonb` no-space bug** — SQLAlchemy's `text()` bind-parameter parser stops scanning an identifier name one character early when `:param` is immediately followed by `::` (PostgreSQL cast operator), leaving literal `:name::jsonb` uncompiled. asyncpg rejects this as "syntax error at or near `:`". Fixed in `entities.py` (10 occurrences), `relationships.py` (1), `ingestion/orchestrator.py` (2), `ingestion/pipeline.py` (7), `provenance/service.py` (4). Fix: always use `:param ::jsonb` (space before `::`).
+- **Seed script timezone-aware datetime** — `seed_flagship_entities.py` used `datetime.now(timezone.utc)` but `aerospace_entities.created_at` is `sa.DateTime` (no timezone). asyncpg rejects timezone-aware datetimes for `TIMESTAMP WITHOUT TIME ZONE` columns. Fixed to `datetime.utcnow()`.
+- **Seed endpoint had no exception handling** — DB errors propagated as bare 500 with no diagnostic detail. Added per-record try/except, `await pg.rollback()` on failure (preventing InFailedSqlTransactionError cascade), and detailed error messages surfaced to the API response.
+- **Per-record errors not surfaced in UI** — `SeedFlagshipButton` discarded the `failed: [{name, aqid, error}]` array from the response and only showed a count. Added scrollable error detail panel.
+
+#### Space-Track
+- **Account suspended** — `GET /api/v1/catalog/health` called `fetcher.health_check()` which queries `/basicspacedata/query/class/gp/LIMIT/1` on every request. This endpoint was polled every 60 seconds by three frontend components simultaneously (OrbitalGlobe, CatalogStatsCard, MissionStatusCard). Space-Track policy allows GP endpoint access once per hour. Removed live probe entirely; health now reports based on credentials presence only.
+
+### Added
+- **`SeedFlagshipButton`** in Entity Browser empty state — one-click admin action to seed 18 flagship entities with full error detail display
+- **`seedFlagshipEntities()`** method added to `caemApi` typed client
+- **`get_propagation_meta_shared()`** — async, Redis-backed cross-worker propagation status reader
+- **`_cache_meta_to_redis()`** — writes compact propagation summary blob after successful Digital Twin run
+- **`_load_orbital_engine_module()`** — collision-proof importlib loader for `orbital-engine/src/*` under private `_orbital_engine_src.*` namespace
+- **`last_error` field** in Digital Twin status endpoint and `RedisStatusWidget` display
+- **`activateError` state** in `RedisStatusWidget` for click-path failures
+
+### Seeded
+- **18 flagship entities** now live in production `aerospace_entities` table: USA · India · France · NASA · ESA · ISRO · SpaceX · Blue Origin · Rocket Lab · ULA · Falcon 9 · Falcon Heavy · Starship · SLS · Ariane 6 · Artemis II · JWST · ISS
+
+
 # ORBITIQ-X — Changelog
 
 All notable changes to ORBITIQ-X are documented in this file.

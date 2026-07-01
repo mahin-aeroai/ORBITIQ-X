@@ -7,17 +7,19 @@ Read this before making any changes. Update this file when the engineering focus
 
 ## Project Overview
 
-ORBITIQ-X is a production-grade Aerospace Intelligence Platform evolving into the
-**Aerospace Knowledge Universe (AKU)** — the "Bloomberg Terminal for Aerospace."
+ORBITIQ-X is a production-grade Aerospace Intelligence Platform —
+the **"Bloomberg Terminal for Aerospace"** / Aerospace Knowledge Universe (AKU).
 
 - **Space Situational Awareness**: 29,198 tracked RSOs with real names
-- **Knowledge Graph**: Neo4j with 29,248 nodes · 118,681 relationships
-- **GraphRAG**: 185-chunk corpus across 12 aerospace domains · 20/20 benchmark
+- **Knowledge Graph**: Neo4j with 29,266 nodes · 118,681 relationships
+- **GraphRAG**: 252-chunk corpus across 16 aerospace domains · 20/20 benchmark
 - **Multi-Agent AI**: 7 specialist agents powered by Claude Sonnet 4.6
 - **CAEM**: Canonical Aerospace Entity Model — 39 entity classes, 76 relationship types
-- **Mission Control**: Next.js 14 with rotating globe and live data
+- **Entity Browser**: 18 flagship entities live (NASA, SpaceX, ESA, ISRO, ISS, JWST…)
+- **Digital Twin**: 29,184 objects propagated via SGP4, Redis-backed, multi-worker aware
+- **Mission Control**: Next.js 14 with animated globe and live data
 
-**Current version:** `v0.4.0`
+**Current version:** `v0.5.0`
 **Backend:** https://orbitiq-x-production.up.railway.app
 **Frontend:** https://orbitiq-x.vercel.app
 **API Docs:** https://orbitiq-x-production.up.railway.app/api/v1/docs
@@ -35,13 +37,14 @@ ORBITIQ-X is a production-grade Aerospace Intelligence Platform evolving into th
 ## Architecture
 
 ```
-PostgreSQL (Railway)     ← 29,198 satellites, 105,755 TLE records
-Neo4j Aura               ← 29,248 nodes, 118,681 relationships
-Qdrant Cloud             ← 185 chunks, aerospace_docs, 384-dim
-Redis                    ← UNAVAILABLE (fix: add REDIS_URL to Railway)
-FastAPI (Railway)        ← 112 endpoints, uvicorn
-Next.js (Vercel)         ← 10 pages, TanStack Query
+PostgreSQL (Railway)     ← 29,198 satellites, 105,755 TLE records, aerospace_entities
+Neo4j Aura               ← 29,266 nodes, 118,681 relationships
+Qdrant Cloud             ← 252 chunks, aerospace_docs, 384-dim
+Redis (Railway)          ← CONNECTED — Digital Twin state, SSE pub/sub
+FastAPI (Railway)        ← ~160 endpoints, gunicorn 2 workers, uvicorn worker class
+Next.js (Vercel)         ← 12 pages, TanStack Query
 CAEM                     ← backend/app/caem/ — knowledge architecture layer
+orbital-engine           ← /app/orbital-engine/ — SGP4 propagation library
 ```
 
 ## Service Connections
@@ -51,44 +54,105 @@ CAEM                     ← backend/app/caem/ — knowledge architecture layer
 | PostgreSQL | Railway plugin | `DATABASE_URL` env var, asyncpg driver |
 | Neo4j | `neo4j+s://bff8c462.databases.neo4j.io` | DB + User: `bff8c462` |
 | Qdrant | `2435500e-...us-west-1-0.aws.cloud.qdrant.io` | Collection: `aerospace_docs`, 384-dim |
-| Redis | Railway plugin | Add REDIS_URL env var → auto-reconnects on startup |
-| Space-Track | `www.space-track.org` | `SPACETRACK_IDENTITY` + `SPACETRACK_PASSWORD` |
+| Redis | Railway plugin | REDIS_URL set and working |
+| Space-Track | `www.space-track.org` | Account SUSPENDED as of 2026-06-30 — awaiting reinstatement |
 | Anthropic | API | `ANTHROPIC_API_KEY`, model: `claude-sonnet-4-6` |
 
 ---
 
 ## Current Phase
 
-**Phase 19 — Corpus Expansion** ✅ Complete
+**Phase 20 — Entity Knowledge Enrichment** (ready to begin)
 
-67 chunks added. Total: 252 chunks, 16 domains.
+18 flagship entities are live in the Entity Browser. The next phase:
+1. Trigger live ingestion pipeline (once Space-Track reinstated)
+2. Schedule periodic ingestion
+3. Neo4j relationship enrichment for the 18 seeded entities
+4. Fix provenance panel (merge `primary_provenance` into `all_sources` in GET `/entities/{aqid}`)
+5. Expand Knowledge Universe seed data
 
-**Next: Phase 20 — Operator Intelligence** (populate OPERATED_BY relationships)
-
-All 76 relationship types formalized. Completed:
-- `relationship_ontology` table: 76 types with cardinality, direction, temporal rules
-- `relationship_audit_log`: full audit trail for all relationship mutations
-- `caem/ontology/relationship_registry.py`: typed `RelationshipDefinition` per type
-- `caem/graph/neo4j_relationship_schema.py`: Neo4j constraints, indexes, bulk upsert
-- `/api/v2/relationships` endpoints: create, validate, snapshot, traversal, ontology query
-- `TRAVERSAL_LIBRARY`: 11 named graph patterns for Graph Agent
-- Migration `0012` chained and seeded
+See ROADMAP.md for the full plan.
 
 ---
 
 ## Engineering Principles
 
-1. **Evidence-based debugging only.** Read logs, run tests, confirm the error before proposing a fix.
+1. **Evidence-based debugging only.** Read the actual error before proposing a fix.
 2. **No speculative fixes.** If root cause is not confirmed, say so.
 3. **Minimal targeted changes.** Fix the specific failure. Do not refactor surrounding code.
 4. **Preserve existing architecture.** Schema, API contracts, middleware stack are stable.
-5. **Extension over replacement.** Add to CAEM schemas and Neo4j relationships. Never redesign them.
+5. **Extension over replacement.** Add to CAEM schemas and Neo4j relationships. Never redesign.
 6. **Production quality.** Every commit must work in production.
 7. **Knowledge first.** Every new capability integrates into the Aerospace Knowledge Graph.
 
 ---
 
-## CAEM — Critical Architecture (Phase 17.1 Complete)
+## CRITICAL PITFALLS — READ BEFORE TOUCHING
+
+### 1. SQLAlchemy `text()` bind params + PostgreSQL type casts
+**`:param::jsonb` (no space) breaks SQLAlchemy's bind parameter parser.**
+The parser stops scanning the parameter name one character early, leaving
+literal `:name::jsonb` uncompiled text in the SQL, which asyncpg rejects as
+"syntax error at or near `:`". Always use `:param ::jsonb` (with a space before `::`).
+
+This affects: `entities.py`, `relationships.py`, `ingestion/pipeline.py`,
+`ingestion/orchestrator.py`, `provenance/service.py` — all already fixed.
+The rule: any `text()` SQL with a PostgreSQL cast must have a space: `:col ::jsonb`, `:val ::text`.
+
+### 2. Datetime: always timezone-naive for `sa.DateTime` columns
+`aerospace_entities.created_at/updated_at/published_at` are `sa.DateTime` (no timezone).
+Always use `datetime.utcnow()` — never `datetime.now(timezone.utc)`.
+asyncpg cannot bind timezone-aware datetimes to `TIMESTAMP WITHOUT TIME ZONE` columns.
+
+### 3. Async session vs sync session — KNOW WHICH ONE YOU NEED
+- **Async session** (`get_pg_session`, `AsyncSession`): for FastAPI `async def` endpoints that use `await pg.execute()`
+- **Sync session** (`get_sync_pg_session`, plain `Session`): required by `ProvenanceService`, `CAEMIngestionPipeline`, `IngestionOrchestrator` — all use unawaited `self.pg.execute()` internally
+
+Passing an async session to sync code (or vice versa) produces silent failures or confusing errors.
+Background tasks must create their own fresh sync session inline — they cannot reuse a FastAPI-injected session because FastAPI closes it when the HTTP response is sent, before the background task runs.
+
+### 4. Gunicorn multi-worker state — use Redis for shared state
+`--workers 2` means two separate OS processes, each with its own Python memory.
+Module-level variables (like `_LIVE_STATES` in `orbital_state_service.py`) are per-process.
+Any state that needs to be visible across workers (Digital Twin propagation counts, scheduler locks)
+must go through Redis. Use `get_propagation_meta_shared()` not `get_propagation_meta()` in status endpoints.
+
+### 5. railway.toml watchPatterns must cover ALL Dockerfile COPY sources
+`Dockerfile.railway` COPYs: `backend/`, `orbital-engine/`, `agents/`, `rag/`, `scripts/`.
+If `watchPatterns` omits any of these, commits touching only that directory trigger NO redeploy.
+Current correct watchPatterns: `backend/**`, `orbital-engine/**`, `agents/**`, `rag/**`, `scripts/**`, `railway.toml`.
+
+### 6. orbital-engine / agents / rag — namespace collision on `src`
+These sibling directories each define their own top-level package named `src`. Multiple services insert their directory at `sys.path[0]`. Use `_load_orbital_engine_module()` in `orbital_state_service.py` and `conjunction_analysis_service.py` — never import orbital-engine via `from src.X import Y`.
+
+### 7. Space-Track API usage policy
+**DO NOT poll Space-Track from health checks or frontend-triggered endpoints.**
+The GP endpoint (`/basicspacedata/query/class/gp`) may only be queried **once per hour**.
+Only the scheduled sync jobs (6h full, 2h incremental) may call Space-Track.
+The account was suspended on 2026-06-30 for health-check polling every 60 seconds.
+
+### 8. Vercel build failures
+`ignoreBuildErrors: true` in `next.config.js` **must stay true**.
+
+### 9. Alembic on Railway PostgreSQL 18
+Always use `AUTOCOMMIT` isolation level. GIN indexes must use `op.execute()`, not `op.create_index()`.
+Widen `alembic_version` to `VARCHAR(64)` BEFORE running alembic (`entrypoint.sh` does this).
+
+### 10. CAEM extension data
+Never add entity-class columns to `aerospace_entities`. Always use `extension_data` JSONB.
+Never use raw relationship type strings. Always use `RelationshipType` enum.
+
+### 11. Neo4j property naming
+Neo4j uses camelCase: `noradId`, `perigeeKm`, `apogeeKm`
+PostgreSQL uses snake_case: `norad_id`, `perigee_km`, `apogee_km`
+
+### 12. Schema persistence
+`rag/src/models/schemas.py` manual patches in Railway shell **DO NOT persist across deploys**.
+The repo version is authoritative.
+
+---
+
+## CAEM — Critical Architecture
 
 Lives at `backend/app/caem/`. Read before touching any entity-related code.
 
@@ -98,9 +162,6 @@ Every entity has an immutable AQID: `AQID-{CLASS}-{SLUG}`
 from caem import generate_aqid, validate_aqid, EntityClass
 aqid = generate_aqid(EntityClass.COMPANY, "SpaceX")  # → "AQID-COMPANY-SPACEX"
 ```
-- AQIDs are **never changed** after creation
-- Display names are attributes, not identifiers
-- External IDs (NORAD, COSPAR, DOI) live in `entity_aliases` table
 
 ### Four-Layer Architecture
 | Layer | System | What lives here |
@@ -110,77 +171,16 @@ aqid = generate_aqid(EntityClass.COMPANY, "SpaceX")  # → "AQID-COMPANY-SPACEX"
 | Knowledge | Qdrant `aerospace_docs` | Embedded chunks for semantic retrieval |
 | Intelligence | Frontend entity pages | AI summaries, graph explorer, timeline |
 
-### Extension Pattern
-Entity-class-specific fields go in `extension_data` JSONB — never add columns to `aerospace_entities`:
-```python
-from caem.entities import validate_extension
-validated = validate_extension(EntityClass.LAUNCH_VEHICLE, {"payload_leo_kg": 22800})
-```
-
-### Relationship Types
-Use `RelationshipType` enum from `caem.relationships` — never invent raw strings:
-```python
-from caem.relationships import RelationshipType, AerospaceRelationship
-rel = AerospaceRelationship(
-    source_aqid="AQID-SATELLITE-ISS",
-    target_aqid="AQID-GOV-AGENCY-NASA",
-    relationship_type=RelationshipType.OPERATED_BY,
-    confidence=0.99,
-)
-```
-
 ### Key CAEM Files
 | File | Purpose |
 |---|---|
 | `backend/app/caem/base.py` | `BaseAerospaceEntity`, AQID, `ProvenanceRecord`, confidence scoring |
 | `backend/app/caem/entities.py` | 31 Pydantic extension schemas + `EXTENSION_REGISTRY` |
-| `backend/app/caem/relationships.py` | 76 `RelationshipType` values, Cypher builder, traversal patterns |
+| `backend/app/caem/relationships.py` | 76 `RelationshipType` values, Cypher builder |
 | `backend/app/caem/graph/neo4j_schema.py` | Idempotent Neo4j schema, GDS projections, batch upsert |
-| `backend/app/caem/ingestion/pipeline.py` | 7-stage ingestion pipeline |
-
----
-
-## CRITICAL PITFALLS — READ BEFORE TOUCHING
-
-### 1. Schema persistence (MOST COMMON BUG)
-`rag/src/models/schemas.py` manual patches in Railway shell **DO NOT persist across deploys**.
-The repo version is authoritative. Required fields verified against `hallucination/guard.py`:
-- **CitationRecord**: citation_key, doc_title, chunk_id, agency, doc_type, publication_year, source_url, relevance_score, excerpt, authors, title, doc_id, year, doi, report_number, page_ref, section_ref
-- **ChunkMetadata**: doc_id, chunk_index, section_title, content_type, agency, doc_type, publication_year, topic_tags, peer_reviewed, has_equations, source_url, doc_title, authors, page_start, page_end, report_number, doi
-
-### 2. Alembic on Railway PostgreSQL 18
-Always use `AUTOCOMMIT` isolation level. GIN indexes must use `op.execute()`, not `op.create_index()`.
-
-### 3. Never use string `primaryjoin` across models
-Causes `InvalidRequestError` on import. Use `back_populates` with proper imports.
-
-### 4. Vercel build failures
-`ignoreBuildErrors: true` in `next.config.js` **must stay true**. If false, TS errors block builds and Vercel serves stale cached pages silently.
-
-### 5. Railway IP blocks
-Celestrak blocks Railway IPs (403). Use Space-Track API instead.
-
-### 6. Catalog regime/type
-- `regime` column NULL for most rows — computed from perigee/apogee at query time
-- `object_type` stored lowercase: `satellite`, `debris`, `rocket_body` — normalize in endpoint
-
-### 7. Space weather endpoint
-Correct path: `/api/v1/space-weather/current` (NOT `/digital-twin/weather`)
-
-### 8. Neo4j property naming
-Neo4j uses camelCase: `noradId`, `perigeeKm`, `apogeeKm`, `inclinationDeg`, `periodMinutes`
-PostgreSQL uses snake_case: `norad_id`, `perigee_km`, `apogee_km`, `inclination_deg`, `period_minutes`
-
-### 9. Neo4j relationship schema (current)
-- `(Satellite)-[:ORBITS]->(CelestialBody {name:'Earth'})` — 58,396
-- `(Satellite)-[:LAUNCHED_BY]->(Country)` — 14,407
-- `(Satellite)-[:BELONGS_TO]->(Constellation)` — 9,823
-- `(Satellite)-[:PART_OF]->(OrbitalRegime)` — 36,055
-- OrbitalRegime names: "Low Earth Orbit", "Geostationary Orbit", "Medium Earth Orbit", "Sun-Synchronous Orbit", "Highly Elliptical Orbit"
-
-### 10. CAEM extension data
-Never add entity-class columns to `aerospace_entities`. Always use `extension_data` JSONB.
-Never use raw relationship type strings. Always use `RelationshipType` enum.
+| `backend/app/caem/ingestion/pipeline.py` | 7-stage ingestion pipeline (sync session) |
+| `backend/app/caem/ingestion/orchestrator.py` | Adapter registry, schedule, pipeline bridge (sync session) |
+| `backend/app/caem/provenance/service.py` | ProvenanceService (sync session) |
 
 ---
 
@@ -189,19 +189,31 @@ Never use raw relationship type strings. Always use `RelationshipType` enum.
 | File | Purpose |
 |---|---|
 | `backend/app/api/v1/endpoints/catalog.py` | `/catalog/satellites` with regime compute + type normalization |
-| `backend/app/api/v1/endpoints/knowledge_graph.py` | KG analytics using BELONGS_TO/LAUNCHED_BY/PART_OF |
-| `backend/app/api/v1/endpoints/rag.py` | `_get_bridge()` with `_OpenAIPipeline` |
-| `backend/app/api/v1/endpoints/entities.py` | 9 CAEM REST endpoints at `/api/v2/entities` |
-| `backend/app/services/graphrag/graphrag_bridge.py` | GraphContextFetcher, `parents[3]` path fix |
-| `backend/app/graph/connection.py` | `init_schema()`, `execute_read()`, `execute_write()` |
-| `rag/src/models/schemas.py` | Complete schema — all fields required by hallucination guard |
-| `rag/src/hallucination/guard.py` | Accesses: doi, page_ref, section_ref, report_number, year, authors |
-| `frontend/src/lib/api.ts` | All API functions + types |
-| `frontend/src/app/catalog/page.tsx` | Satellite catalog with detail drawer |
-| `frontend/src/app/intelligence/page.tsx` | AI Workspace — GraphRAG Q&A |
-| `frontend/next.config.js` | `ignoreBuildErrors: true` — MUST stay true |
-| `scripts/populate_sat_names.py` | Populate satellite names/types from Space-Track |
-| `scripts/corpus_seed_v04.py` | 185-chunk corpus seeding script |
+| `backend/app/api/v1/endpoints/entities.py` | CAEM entity CRUD + `seed-flagship` endpoint |
+| `backend/app/api/v1/endpoints/ingestion.py` | `/api/v2/ingestion` — manual trigger (background sync session) |
+| `backend/app/api/v1/endpoints/platform.py` | Platform health rollup (MinIO excluded) |
+| `backend/app/api/v1/endpoints/digital_twin.py` | Digital Twin status, propagation, Redis (api/v1) |
+| `backend/app/digital_twin/services/orbital_state_service.py` | SGP4 propagation, `_load_orbital_engine_module()`, Redis meta cache |
+| `backend/app/services/catalog_scheduler.py` | APScheduler jobs — 15min DT, 2h incremental, 6h full sync |
+| `backend/app/services/spacetrack_fetcher.py` | Space-Track HTTP client — DO NOT call from health endpoints |
+| `scripts/seed_flagship_entities.py` | 18 flagship entity seed records |
+| `frontend/src/lib/api.ts` | All API functions + `getApiAccessToken()` (in-memory JWT store) |
+| `frontend/src/lib/caem-api.ts` | CAEM API client (uses `getApiAccessToken()`) |
+| `frontend/src/app/entities/page.tsx` | Entity Browser + SeedFlagshipButton |
+| `frontend/src/components/ssa/RedisStatusWidget.tsx` | System Status bottom panel + Digital Twin activation |
+| `railway.toml` | watchPatterns — must cover all Dockerfile COPY sources |
+
+---
+
+## Auth Token Pattern
+
+The frontend stores the JWT in memory only (not localStorage). Always use:
+```typescript
+import { getApiAccessToken } from "@/lib/api";
+const token = getApiAccessToken();
+headers: token ? { Authorization: `Bearer ${token}` } : {}
+```
+Never use `localStorage.getItem('orbitiq_token')` — that key is never written.
 
 ---
 
@@ -209,7 +221,7 @@ Never use raw relationship type strings. Always use `RelationshipType` enum.
 
 ```python
 import sys, os, asyncio
-sys.path.insert(0, '/app')
+sys.path.insert(0, '/app/app')
 os.environ.setdefault('NEO4J_USER', 'bff8c462')
 
 async def main():
@@ -224,21 +236,9 @@ async def main():
 asyncio.run(main())
 ```
 
-## Space-Track API (from Railway shell)
-
-```python
-import urllib.request, urllib.parse, json, http.cookiejar
-cj = http.cookiejar.CookieJar()
-opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
-opener.open("https://www.space-track.org/ajaxauth/login",
-    urllib.parse.urlencode({"identity": IDENTITY, "password": PASSWORD}).encode(), timeout=30)
-url = "https://www.space-track.org/basicspacedata/query/class/satcat/NORAD_CAT_ID/1--34999/format/json/limit/30000"
-data = json.loads(opener.open(url, timeout=120).read())
-```
-
 ---
 
-## Phase 17 Roadmap
+## Phase 17 Roadmap Status
 
 | Sub-Phase | Scope | Status |
 |---|---|---|
@@ -248,6 +248,10 @@ data = json.loads(opener.open(url, timeout=120).read())
 | 17.4 | Knowledge Ingestion Framework | ✅ Complete |
 | 17.5 | Reusable Entity Intelligence Pages | ✅ Complete |
 | 17.6 | Cross-Entity Navigation | ✅ Complete |
+| 17.7 | Business Intelligence Layer | ✅ Complete |
+| 17.8 | Historical Intelligence Layer | ✅ Complete |
+| 17.9 | Scientific Knowledge Layer | ✅ Complete |
+| 17.10 | Aerospace Knowledge Universe v1 | ✅ Complete |
 
 ---
 
