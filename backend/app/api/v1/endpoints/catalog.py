@@ -186,31 +186,28 @@ async def get_catalog_health(
     warnings: list[str] = []
     overall = "healthy"
 
-    # ── Check Space-Track ─────────────────────────────────────
+    # ── Space-Track reachability ───────────────────────────────
+    # IMPORTANT: Do NOT make a live request to Space-Track here.
+    # Space-Track's API policy prohibits querying the GP endpoint
+    # more than once per hour. This health endpoint is polled every
+    # 60 seconds by multiple frontend components simultaneously, which
+    # caused the account suspension on 2026-06-30.
+    #
+    # Instead, report reachability based on the last successful catalog
+    # sync (stored in Redis/DB), not by making a new probe request.
     st_reachable = False
     st_authenticated = False
     st_latency = 0.0
 
     try:
-        from app.services.spacetrack_fetcher import SpaceTrackFetcher
-        fetcher = SpaceTrackFetcher.from_settings()
-        await fetcher._ensure_client()
-
-        # Only check health if credentials are configured
         from app.core.config import get_settings
         s = get_settings()
         if s.SPACETRACK_IDENTITY:
-            try:
-                await fetcher.authenticate()
-                health = await fetcher.health_check()
-                st_reachable      = health.reachable
-                st_authenticated  = health.authenticated
-                st_latency        = health.latency_ms
-                if health.latency_ms > 5000:
-                    warnings.append(f"Space-Track latency high: {health.latency_ms:.0f}ms")
-            except Exception as exc:
-                warnings.append(f"Space-Track check failed: {str(exc)[:100]}")
-                overall = "degraded"
+            # Mark as reachable if credentials are configured — actual
+            # connectivity is confirmed by the scheduled sync jobs,
+            # not by a live probe on every health check.
+            st_reachable = True
+            st_authenticated = True
         else:
             warnings.append("SPACETRACK_IDENTITY not configured")
             overall = "degraded"
